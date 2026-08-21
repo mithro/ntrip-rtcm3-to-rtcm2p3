@@ -49,7 +49,7 @@ class DgpsGenerator:
     def __init__(self, max_iod_age_s: float = 7200.0) -> None:
         self.base: tuple[float, float, float] | None = None
         self.ephemerides: dict[int, Ephemeris] = {}
-        self._prev: dict[int, tuple[float, float]] = {}  # prn -> (tow, prc)
+        self._prev: dict[int, tuple[float, float]] = {}  # prn -> (tow, raw correction)
         self.max_residual_m = 100.0  # reject satellites whose residual is implausible
 
     def set_station(self, ecef: tuple[float, float, float]) -> None:
@@ -71,16 +71,25 @@ class DgpsGenerator:
         if not raw:
             return []
 
-        offset = median(raw.values())  # common base-clock term
+        offset = median(raw.values())  # common base-clock term (removed from PRC)
+
+        # RRC is the rate of change of the *raw* correction (which drifts smoothly
+        # with the base clock) minus the common drift; computing it on the PRC
+        # instead would be corrupted by the per-epoch median jumping as the
+        # satellite set changes.
+        raw_rate: dict[int, float] = {}
+        for prn, value in raw.items():
+            prev = self._prev.get(prn)
+            if prev is not None and tow != prev[0]:
+                raw_rate[prn] = (value - prev[1]) / (tow - prev[0])
+        rate_offset = median(raw_rate.values()) if raw_rate else 0.0
+
         out: list[Correction] = []
         for prn, value in sorted(raw.items()):
             prc = value - offset
+            self._prev[prn] = (tow, value)
             if abs(prc) > 1.0e5:  # gross outlier (bad obs/eph) -> skip
                 continue
-            rrc = 0.0
-            prev = self._prev.get(prn)
-            if prev is not None and tow != prev[0]:
-                rrc = (prc - prev[1]) / (tow - prev[0])
-            self._prev[prn] = (tow, prc)
+            rrc = raw_rate[prn] - rate_offset if prn in raw_rate else 0.0
             out.append(Correction(prn=prn, prc=prc, rrc=rrc, iod=self.ephemerides[prn].iode))
         return out
