@@ -86,43 +86,55 @@ jobs:
           sed -i 's/^          //' Release
           apt-ftparchive release . >> Release
 
-      - name: Sign repo
+      - name: Sign repo (only if a signing key secret is configured)
+        id: sign
         env:
           GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
-        if: env.GPG_PRIVATE_KEY != ''
         run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "APT_GPG_PRIVATE_KEY not set -> publishing an UNSIGNED repo" \
+                 "(install with [trusted=yes]). Add the secret to enable signing." >&2
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           cd apt-repo
           gpg --batch --yes --armor --detach-sign --output Release.gpg Release
           gpg --batch --yes --armor --clearsign --output InRelease Release
           gpg --batch --yes --armor --export > ntrip-rtcm3-to-rtcm2p3.gpg
+          echo "signed=true" >> "$GITHUB_OUTPUT"
 
       - name: Create index page
+        env:
+          SIGNED: ${{ steps.sign.outputs.signed }}
         run: |
-          cat > apt-repo/index.html <<'HTMLEOF'
-          <!DOCTYPE html>
-          <html>
-          <head><title>ntrip-rtcm3-to-rtcm2p3 apt repository</title></head>
-          <body>
-          <h1>ntrip-rtcm3-to-rtcm2p3 apt repository</h1>
-          <h2>Setup</h2>
-          <pre>
-          # Download signing key
-          curl -fsSL https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/ntrip-rtcm3-to-rtcm2p3.gpg \
+          base=https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3
+          if [ "$SIGNED" = "true" ]; then
+            setup=$(cat <<EOF
+          # Verified install (repo is GPG-signed):
+          curl -fsSL $base/ntrip-rtcm3-to-rtcm2p3.gpg \\
             | sudo tee /etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg > /dev/null
-
-          # Add apt source
-          echo "deb [signed-by=/etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg] https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/ ./" \
+          echo "deb [signed-by=/etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg] $base/ ./" \\
             | sudo tee /etc/apt/sources.list.d/ntrip-rtcm3-to-rtcm2p3.list
-
-          # Install
-          sudo apt update
-          sudo apt install ntrip-rtcm3-to-rtcm2p3
-          </pre>
-          </body>
-          </html>
-          HTMLEOF
-          sed -i 's/^          //' apt-repo/index.html
+          sudo apt update && sudo apt install ntrip-rtcm3-to-rtcm2p3
+          EOF
+          )
+          else
+            setup=$(cat <<EOF
+          # This repository is currently UNSIGNED; trust it explicitly:
+          echo "deb [trusted=yes] $base/ ./" \\
+            | sudo tee /etc/apt/sources.list.d/ntrip-rtcm3-to-rtcm2p3.list
+          sudo apt update && sudo apt install ntrip-rtcm3-to-rtcm2p3
+          EOF
+          )
+          fi
+          {
+            echo '<!DOCTYPE html><html>'
+            echo '<head><title>ntrip-rtcm3-to-rtcm2p3 apt repository</title></head>'
+            echo '<body><h1>ntrip-rtcm3-to-rtcm2p3 apt repository</h1><h2>Setup</h2><pre>'
+            printf '%s\n' "$setup"
+            echo '</pre></body></html>'
+          } > apt-repo/index.html
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
