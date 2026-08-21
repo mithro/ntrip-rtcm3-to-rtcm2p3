@@ -11,13 +11,17 @@ requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Tim 'mithro' Ansell", email = "me@mith.ro" }]
 keywords = ["ntrip", "rtcm", "gnss", "dgps", "gps"]
-dependencies = []
+dependencies = ["pyrtcm>=1.2"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
 
+[project.scripts]
+ntrip-rtcm3-to-rtcm2p3 = "rtcm3to2p3.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/mithro/ntrip-rtcm3-to-rtcm2p3"
+Documentation = "https://ntrip-rtcm3-to-rtcm2p3.readthedocs.io"
 
 [tool.hatch.build.targets.wheel]
 packages = ["rtcm3to2p3"]
