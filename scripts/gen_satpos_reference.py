@@ -11,7 +11,7 @@ import gnss_lib_py as glp
 import numpy as np
 from gnss_lib_py.utils.sv_models import find_sv_states
 
-from rtcm3to2p3.ephemeris import Ephemeris, satellite_position
+from rtcm3to2p3.ephemeris import C, Ephemeris, satellite_clock_bias, satellite_position
 
 EPH = Ephemeris(
     prn=5, week=2300, toe=100000.0,
@@ -50,6 +50,17 @@ def main():
         mine = satellite_position(EPH, t)
         diff = np.linalg.norm(np.array(mine) - np.array(ref))
         print(f"    {t}: {tuple(round(v, 4) for v in ref)},   # |diff|={diff:.2e} m")
+
+    # Clock bias: gnss_lib_py's b_sv_m = c * (af0 + af1*dt + af2*dt^2 +
+    # relativistic - Tgd) -- it applies the L1 group delay, matching our
+    # apply_tgd=True (the single-frequency correction used by the DGPS math).
+    print("# frozen into tests/test_ephemeris.py::_GLP_CLOCK_REF (seconds)")
+    for t in TIMES:
+        millis = (EPH.week * 604800 + t) * 1000.0
+        sv = find_sv_states(np.array([millis]), nd)
+        ref_s = float(np.ravel(sv["b_sv_m"])[0]) / C
+        mine = satellite_clock_bias(EPH, t, apply_tgd=True)
+        print(f"    {t}: {ref_s!r},   # |diff|={abs(mine - ref_s):.2e} s")
 
 
 if __name__ == "__main__":

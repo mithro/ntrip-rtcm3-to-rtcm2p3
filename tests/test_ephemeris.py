@@ -27,6 +27,15 @@ _GLP_REF = {
     101800.0: (14863373.6987, -3756099.8351, 21551178.4947),
 }
 
+# Independent reference clock bias (seconds) from the same gnss_lib_py call
+# (b_sv_m / c); it includes the relativistic term and the L1 group delay, so it
+# matches our apply_tgd=True to machine precision. Regenerate with the script.
+_GLP_CLOCK_REF = {
+    100200.0: 9.999148162519997e-05,
+    99000.0: 9.99922336110723e-05,
+    101800.0: 9.999066818559218e-05,
+}
+
 
 @pytest.mark.parametrize(("t", "ref"), _GLP_REF.items())
 def test_satpos_matches_gnss_lib_py(t, ref):
@@ -58,10 +67,28 @@ def test_satpos_finite_near_week_boundary():
         assert 25.0e6 < math.sqrt(x * x + y * y + z * z) < 27.0e6
 
 
+@pytest.mark.parametrize(("t", "ref"), _GLP_CLOCK_REF.items())
+def test_clock_bias_matches_gnss_lib_py(t, ref):
+    # Independent cross-check of the whole clock model (polynomial + relativistic
+    # + Tgd) against gnss_lib_py -- not just internal self-consistency.
+    b = satellite_clock_bias(EPH, t, apply_tgd=True)
+    assert b == pytest.approx(ref, abs=1e-12)  # ~sub-picosecond vs independent impl
+
+
 def test_clock_bias_polynomial_and_relativistic():
     b = satellite_clock_bias(EPH, EPH.toc, apply_tgd=False)
     assert b == pytest.approx(EPH.af0, abs=2e-8)  # af0 dominates; relativistic is tiny
     assert b != EPH.af0  # but the relativistic eccentricity term is present
+
+
+def test_af2_quadratic_term_applied():
+    # An ephemeris differing only in af2 must shift the bias by exactly af2*dt^2.
+    af2 = 1.0e-13
+    eph2 = Ephemeris(**{**EPH.__dict__, "af2": af2})
+    dt = 4000.0  # seconds from toc
+    b0 = satellite_clock_bias(EPH, EPH.toc + dt, apply_tgd=False)
+    b2 = satellite_clock_bias(eph2, EPH.toc + dt, apply_tgd=False)
+    assert b2 - b0 == pytest.approx(af2 * dt * dt, rel=1e-9)
 
 
 def test_tgd_removed_for_single_frequency():
