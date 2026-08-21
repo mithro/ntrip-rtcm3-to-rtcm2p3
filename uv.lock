@@ -406,7 +406,7 @@ wheels = [
 
 [[package]]
 name = "ntrip-rtcm3-to-rtcm2p3"
-version = "0.0.1"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "pyrtcm" },
