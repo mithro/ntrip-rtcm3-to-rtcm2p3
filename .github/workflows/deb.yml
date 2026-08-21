@@ -22,16 +22,24 @@ jobs:
           fetch-depth: 0
       - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
+      - name: Run the test suite (gate publishing on tests passing)
+        run: |
+          apt-get install -y --no-install-recommends gpsd-clients rtklib python3-pip
+          pip install --break-system-packages '.[dev]'
+          python3 -m pytest
+
       - name: Build this package
         run: dpkg-buildpackage -us -uc -b
 
       - name: Build unpackaged deps (pyrtcm, pynmeagps) from PyPI
         run: |
-          mkdir -p /tmp/deps && cd /tmp/deps
-          pip download --no-deps --no-binary=:all: "pynmeagps>=1.1.4" "pyrtcm>=1.2"
-          for sdist in *.tar.gz; do
-            py2dsc-deb --dist-dir=/tmp/depdebs "$sdist"
-          done
+          mkdir -p /tmp/deps /tmp/depdebs
+          pip download --no-deps --no-binary=:all: --dest /tmp/deps \
+            "pynmeagps>=1.1.4" "pyrtcm>=1.2"
+          # pynmeagps first; pyrtcm depends on it (dh_python3 can't infer this
+          # from the sdist without the package in the archive)
+          packaging/build-pypi-deb.sh /tmp/deps/pynmeagps-*.tar.gz /tmp/depdebs
+          packaging/build-pypi-deb.sh /tmp/deps/pyrtcm-*.tar.gz /tmp/depdebs python3-pynmeagps
 
       - name: Collect debs
         run: |
