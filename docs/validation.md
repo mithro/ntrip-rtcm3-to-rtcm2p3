@@ -13,7 +13,7 @@ self-consistency.
 | RTCM 2.3 encoder | a real **u-blox 7** reports a DGPS fix from the output (hardware) |
 | Satellite position ({mod}`rtcm3to2p3.ephemeris`) | **gnss_lib_py** `find_sv_states` (Stanford NAV Lab), agreement ~2 mm |
 | Whole conversion ({mod}`rtcm3to2p3.dgps`) | live AUSCORS feed: raw corrections cluster < ~50 m |
-| NTRIP client + caster ({mod}`rtcm3to2p3.ntrip`) | RTKLIB **`str2str`**, BKG **`bnc`**, and **wangkanai/caster** (.NET), each a separate implementation |
+| NTRIP client + caster ({mod}`rtcm3to2p3.ntrip`) | RTKLIB **`str2str`** (in CI); BKG **`bnc`** and **wangkanai/caster** (.NET) optional, run when the tool is present |
 
 ## Word parity
 
