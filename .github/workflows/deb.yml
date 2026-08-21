@@ -1,0 +1,125 @@
+name: Debian Packages
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential ca-certificates git \
+            dpkg-dev debhelper dh-python pybuild-plugin-pyproject \
+            python3-all python3-hatchling python3-stdeb python3-pip
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build this package
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Build unpackaged deps (pyrtcm, pynmeagps) from PyPI
+        run: |
+          mkdir -p /tmp/deps && cd /tmp/deps
+          pip download --no-deps --no-binary=:all: \
+            "pynmeagps>=1.1.4" "pyrtcm>=1.2" --break-system-packages
+          for sdist in *.tar.gz; do
+            py2dsc-deb --dist-dir=/tmp/depdebs "$sdist"
+          done
+
+      - name: Collect debs
+        run: |
+          mkdir -p built-debs
+          cp ../*.deb built-debs/
+          cp /tmp/depdebs/*.deb built-debs/ || true
+          ls -l built-debs/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debs
+          path: built-debs/
+
+  publish-apt:
+    needs: build-deb
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: debs
+          path: apt-repo/
+
+      - name: Generate apt repo metadata
+        run: |
+          sudo apt-get update && sudo apt-get install -y apt-utils
+          cd apt-repo
+          dpkg-scanpackages --multiversion . > Packages
+          gzip -k Packages
+          cat > Release <<EOF
+          Origin: ntrip-rtcm3-to-rtcm2p3
+          Label: ntrip-rtcm3-to-rtcm2p3
+          Suite: stable
+          Codename: trixie
+          Architectures: all
+          Components: main
+          Description: ntrip-rtcm3-to-rtcm2p3 apt repository
+          EOF
+          sed -i 's/^          //' Release
+          apt-ftparchive release . >> Release
+
+      - name: Sign repo
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        if: env.GPG_PRIVATE_KEY != ''
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          cd apt-repo
+          gpg --batch --yes --armor --detach-sign --output Release.gpg Release
+          gpg --batch --yes --armor --clearsign --output InRelease Release
+          gpg --batch --yes --armor --export > ntrip-rtcm3-to-rtcm2p3.gpg
+
+      - name: Create index page
+        run: |
+          cat > apt-repo/index.html <<'HTMLEOF'
+          <!DOCTYPE html>
+          <html>
+          <head><title>ntrip-rtcm3-to-rtcm2p3 apt repository</title></head>
+          <body>
+          <h1>ntrip-rtcm3-to-rtcm2p3 apt repository</h1>
+          <h2>Setup</h2>
+          <pre>
+          # Download signing key
+          curl -fsSL https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/ntrip-rtcm3-to-rtcm2p3.gpg \
+            | sudo tee /etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg > /dev/null
+
+          # Add apt source
+          echo "deb [signed-by=/etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg] https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/ ./" \
+            | sudo tee /etc/apt/sources.list.d/ntrip-rtcm3-to-rtcm2p3.list
+
+          # Install
+          sudo apt update
+          sudo apt install ntrip-rtcm3-to-rtcm2p3
+          </pre>
+          </body>
+          </html>
+          HTMLEOF
+          sed -i 's/^          //' apt-repo/index.html
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apt-repo/
+      - id: deploy
+        uses: actions/deploy-pages@v4

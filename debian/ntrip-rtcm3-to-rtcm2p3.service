@@ -1,0 +1,21 @@
+[Unit]
+Description=NTRIP rebroadcaster with RTCM3 to RTCM 2.3 DGPS conversion
+Documentation=https://ntrip-rtcm3-to-rtcm2p3.readthedocs.io
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# NTRIP_UPSTREAM_PASSWORD and NTRIP_ARGS come from the root-only env file; the
+# password reaches the process via the environment, never the command line.
+EnvironmentFile=/etc/ntrip-rtcm3-to-rtcm2p3/env
+ExecStart=/usr/bin/ntrip-rtcm3-to-rtcm2p3 $NTRIP_ARGS
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

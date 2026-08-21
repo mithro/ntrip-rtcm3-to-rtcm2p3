@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ntrip-rtcm3-to-rtcm2p3"
-version = "0.0.1"
+version = "0.1.0"
 description = "NTRIP receiver + LAN rebroadcaster that converts an RTCM 3.x reference stream into RTCM 2.3 DGPS corrections for legacy receivers"
 readme = "README.md"
 requires-python = ">=3.11"

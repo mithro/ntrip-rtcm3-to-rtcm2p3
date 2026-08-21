@@ -1,0 +1,6 @@
+ntrip-rtcm3-to-rtcm2p3 (0.1.0) unstable; urgency=medium
+
+  * Initial Debian package.
+  * Standard dh-python packaging with pybuild.
+
+ -- Tim Ansell <tim@mithis.com>  Sat, 22 Aug 2026 12:00:00 +1030

@@ -1,0 +1,45 @@
+Source: ntrip-rtcm3-to-rtcm2p3
+Section: python
+Priority: optional
+Maintainer: Tim Ansell <tim@mithis.com>
+Build-Depends: debhelper-compat (= 13),
+               dh-python,
+               pybuild-plugin-pyproject,
+               python3-all,
+               python3-hatchling,
+Standards-Version: 4.7.0
+Homepage: https://github.com/mithro/ntrip-rtcm3-to-rtcm2p3
+Vcs-Git: https://github.com/mithro/ntrip-rtcm3-to-rtcm2p3.git
+Vcs-Browser: https://github.com/mithro/ntrip-rtcm3-to-rtcm2p3
+
+Package: python3-ntrip-rtcm3-to-rtcm2p3
+Architecture: all
+# python3-pyrtcm (and its dep python3-pynmeagps) are not in the main Debian
+# archive; they are published alongside this package in the same apt repo at
+# https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/ (built by
+# .github/workflows/deb.yml). Add that repo before installing.
+Depends: ${python3:Depends},
+         ${misc:Depends},
+         python3-pyrtcm,
+Description: RTCM 3.x to RTCM 2.3 DGPS conversion library and CLI
+ Converts an RTCM 3.x reference-station stream (observations, station position
+ and broadcast ephemeris) into RTCM 2.3 Type 1 DGPS corrections that legacy
+ single-band receivers (e.g. u-blox 7) can use, and re-serves both streams over
+ NTRIP.
+ .
+ This package provides the Python library and the ntrip-rtcm3-to-rtcm2p3
+ command-line tool.
+
+Package: ntrip-rtcm3-to-rtcm2p3
+Architecture: all
+Depends: python3-ntrip-rtcm3-to-rtcm2p3 (= ${binary:Version}),
+         python3,
+         systemd,
+         ${misc:Depends}
+Description: NTRIP rebroadcaster service with RTCM3 to RTCM 2.3 conversion
+ Installs the ntrip-rtcm3-to-rtcm2p3 systemd service, which connects to an
+ upstream NTRIP caster, relays the RTCM3 reference stream and serves generated
+ RTCM 2.3 DGPS corrections to LAN clients.
+ .
+ Configure the upstream caster, credentials and bind addresses in
+ /etc/ntrip-rtcm3-to-rtcm2p3/env, then start the service.

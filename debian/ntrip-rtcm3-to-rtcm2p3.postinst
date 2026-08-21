@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+
+if [ "$1" = "configure" ]; then
+    mkdir -p /etc/ntrip-rtcm3-to-rtcm2p3
+    if [ ! -f /etc/ntrip-rtcm3-to-rtcm2p3/env ]; then
+        cp /usr/share/ntrip-rtcm3-to-rtcm2p3/env.example /etc/ntrip-rtcm3-to-rtcm2p3/env
+        chmod 0600 /etc/ntrip-rtcm3-to-rtcm2p3/env
+    fi
+fi
+
+#DEBHELPER#
