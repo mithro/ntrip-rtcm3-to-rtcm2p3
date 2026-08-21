@@ -19,3 +19,6 @@ venv/
 .idea/
 *.swp
 .DS_Store
+
+# Sphinx build
+docs/_build/
