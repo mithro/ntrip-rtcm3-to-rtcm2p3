@@ -175,11 +175,47 @@ def test_prn32_transmitted_as_zero():
     assert decode_rtcm2(data)[0]["sats"][0]["prn"] == 32
 
 
+def test_empty_corrections_header_only():
+    # a legitimate station-health-only message: two header words, N=0, no sats
+    enc = Rtcm2Encoder()
+    data = b"".join(enc.encode_type1(7, k, 0, 3, []) for k in range(3))
+    m = decode_rtcm2(data)[0]
+    assert m["type"] == 1 and m["station_id"] == 7 and m["length"] == 0
+    assert m["health"] == 3 and m["sats"] == []
+
+
+def test_never_emits_sentinel_values():
+    # -655.36 m / -0.256 m/s round to the fine-scale sentinels (-32768 / -128);
+    # the encoder must switch scale to avoid them. The 1e6 values overflow even
+    # coarse scale and must clamp to +/-max (never the sentinel).
+    enc = Rtcm2Encoder()
+    corr = [
+        Correction(prn=1, prc=-655.36, rrc=-0.256, iod=0),
+        Correction(prn=2, prc=1e6, rrc=1e3, iod=0),
+        Correction(prn=3, prc=-1e6, rrc=-1e3, iod=0),
+    ]
+    data = b"".join(enc.encode_type1(1, k, 0, 0, corr) for k in range(3))
+    m = decode_rtcm2(data)[0]
+    for s in m["sats"]:
+        assert s["prc"] != -32768 and s["rrc"] != -128
+    s0 = m["sats"][0]
+    assert s0["prc"] * PRC_SCALE[s0["scale"]] == pytest.approx(-655.36, abs=0.32)
+    assert m["sats"][1]["prc"] == 32767 and m["sats"][1]["rrc"] == 127  # clamped positive max
+    assert m["sats"][2]["prc"] == -32767 and m["sats"][2]["rrc"] == -127  # clamped, not sentinel
+
+
 def test_field_range_errors():
     enc = Rtcm2Encoder()
-    with pytest.raises(ValueError):
-        enc.encode_type1(2000, 0, 0, 0, CORR)  # station_id too big
-    with pytest.raises(ValueError):
-        enc.encode_type1(1, 0, 0, 0, [Correction(prn=99, prc=0, rrc=0, iod=0)])
-    with pytest.raises(ValueError):
-        enc.encode_type1(1, 0, 0, 0, [Correction(prn=1, prc=0, rrc=0, iod=999)])
+    bad_calls = [
+        lambda: enc.encode_type1(2000, 0, 0, 0, CORR),  # station_id > 1023
+        lambda: enc.encode_type1(1, 9999, 0, 0, []),  # zcount > 8191
+        lambda: enc.encode_type1(1, 0, 9, 0, []),  # seq > 7
+        lambda: enc.encode_type1(1, 0, 0, 9, []),  # health > 7
+        lambda: enc.encode_type1(1, 0, 0, 0, [Correction(prn=99, prc=0, rrc=0, iod=0)]),  # prn high
+        lambda: enc.encode_type1(1, 0, 0, 0, [Correction(prn=0, prc=0, rrc=0, iod=0)]),  # prn=0
+        lambda: enc.encode_type1(1, 0, 0, 0, [Correction(prn=1, prc=0, rrc=0, iod=999)]),  # iod
+        lambda: enc.encode_type1(1, 0, 0, 0, [Correction(prn=1, prc=0, rrc=0, iod=0, udre=9)]),
+    ]
+    for call in bad_calls:
+        with pytest.raises(ValueError):
+            call()
