@@ -8,11 +8,10 @@ and PRC arithmetic without any real data. The whole chain is additionally
 validated end-to-end against a live AUSCORS feed by
 ``scripts/validate_dgps_live.py`` (residuals cluster < ~50 m).
 """
+from dataclasses import replace
 from statistics import median
 
 import pytest
-
-from dataclasses import replace
 
 from rtcm3to2p3.dgps import DgpsGenerator, _geometric_range, raw_correction, udre_index
 from rtcm3to2p3.ephemeris import C, Ephemeris, satellite_clock_bias, satellite_position
@@ -180,6 +179,6 @@ def test_corrections_set_udre_from_magnitude():
     for eph in ephs.values():
         gen.add_ephemeris(eph)
     corr = {c.prn: c for c in gen.corrections(tow, prs)}
-    for prn, c in corr.items():
+    for c in corr.values():
         assert c.udre == udre_index(c.prc)
     assert corr[27].udre == 2
