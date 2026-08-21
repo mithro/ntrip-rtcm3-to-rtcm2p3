@@ -28,8 +28,7 @@ jobs:
       - name: Build unpackaged deps (pyrtcm, pynmeagps) from PyPI
         run: |
           mkdir -p /tmp/deps && cd /tmp/deps
-          pip download --no-deps --no-binary=:all: \
-            "pynmeagps>=1.1.4" "pyrtcm>=1.2" --break-system-packages
+          pip download --no-deps --no-binary=:all: "pynmeagps>=1.1.4" "pyrtcm>=1.2"
           for sdist in *.tar.gz; do
             py2dsc-deb --dist-dir=/tmp/depdebs "$sdist"
           done
