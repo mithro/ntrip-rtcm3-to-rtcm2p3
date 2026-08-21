@@ -32,6 +32,15 @@ _TYPE3_INTERVAL_S = 60.0  # re-broadcast the base station position this often
 _THROUGHPUT_EVERY = 300  # log a throughput line every N Type 1 messages
 
 
+def modified_zcount(tow: float) -> int:
+    """RTCM 2.3 modified Z-count for a GPS time-of-week (seconds).
+
+    0.6 s units within the hour, valid range 0..5999. round() can land on 6000 at
+    the top of the hour, so wrap modulo 6000 (not the 13-bit field size 8192).
+    """
+    return int(round((tow % 3600) / 0.6)) % 6000
+
+
 def extract_rtcm3_frames(buf: bytearray) -> list[bytes]:
     """Pull complete RTCM3 frames (0xD3 + 10-bit len + payload + 3-byte CRC) from
     a growing buffer, leaving any partial trailing frame in place."""
@@ -126,7 +135,7 @@ class Converter:
             corrections = self.gen.corrections(tow, pseudoranges)
             if not corrections:
                 return
-            zcount = int(round((tow % 3600) / 0.6)) % 8192
+            zcount = modified_zcount(tow)
             # Type 3 and Type 1 share the one encoder so the parity seed chains.
             self._maybe_emit_type3(tow, zcount)
             out = self.encoder.encode_type1(self.station_id, zcount, self._next_seq(),
