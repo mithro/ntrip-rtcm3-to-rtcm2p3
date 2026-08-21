@@ -58,6 +58,8 @@ def parse_ephemeris(msg) -> Ephemeris:
         af2=float(msg.DF082),
         tgd=float(msg.DF101),
         iode=int(msg.DF071),
+        health=int(msg.DF102),
+        ura=int(msg.DF077),
     )
 
 

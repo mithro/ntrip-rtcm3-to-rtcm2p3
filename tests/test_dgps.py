@@ -12,7 +12,9 @@ from statistics import median
 
 import pytest
 
-from rtcm3to2p3.dgps import DgpsGenerator, _geometric_range, raw_correction
+from dataclasses import replace
+
+from rtcm3to2p3.dgps import DgpsGenerator, _geometric_range, raw_correction, udre_index
 from rtcm3to2p3.ephemeris import C, Ephemeris, satellite_clock_bias, satellite_position
 
 BASE = (-3924917.30, 3462747.06, -3632703.99)  # ADDE (Adelaide) ECEF, metres
@@ -115,3 +117,69 @@ def test_missing_ephemeris_is_skipped():
     prs = {3: _perfect_pr(ephs[3], tow, 0.0), 99: 22e6}  # no eph for PRN 99
     corr = gen.corrections(tow, prs)
     assert [c.prn for c in corr] == [3]
+
+
+def test_unhealthy_ephemeris_is_skipped():
+    ephs = _ephemerides()
+    tow = 100200.0
+    prs = {p: _perfect_pr(ephs[p], tow, 0.0) for p in ephs}
+    gen = DgpsGenerator()
+    gen.set_station(BASE)
+    for prn, eph in ephs.items():
+        gen.add_ephemeris(replace(eph, health=1) if prn == 11 else eph)
+    prns = {c.prn for c in gen.corrections(tow, prs)}
+    assert 11 not in prns and prns == set(ephs) - {11}
+
+
+def test_stale_ephemeris_is_skipped():
+    ephs = _ephemerides()  # toe = 100000
+    tow = 100200.0  # 200 s after toe
+    prs = {p: _perfect_pr(ephs[p], tow, 0.0) for p in ephs}
+    gen = DgpsGenerator(max_iod_age_s=100.0)  # 200 s > 100 s -> all stale
+    gen.set_station(BASE)
+    for eph in ephs.values():
+        gen.add_ephemeris(eph)
+    assert gen.corrections(tow, prs) == []
+    # with a generous window the same epoch yields corrections
+    gen2 = DgpsGenerator(max_iod_age_s=7200.0)
+    gen2.set_station(BASE)
+    for eph in ephs.values():
+        gen2.add_ephemeris(eph)
+    assert {c.prn for c in gen2.corrections(tow, prs)} == set(ephs)
+
+
+def test_residual_outlier_is_dropped():
+    ephs = _ephemerides()
+    tow = 100200.0
+    extras = {3: 0.0, 11: 0.0, 19: 0.0, 27: 0.0, 31: 1000.0}  # PRN 31 way off
+    prs = {p: _perfect_pr(ephs[p], tow, extras[p]) for p in ephs}
+    gen = DgpsGenerator(max_residual_m=100.0)
+    gen.set_station(BASE)
+    for eph in ephs.values():
+        gen.add_ephemeris(eph)
+    prns = {c.prn for c in gen.corrections(tow, prs)}
+    assert 31 not in prns and prns == set(ephs) - {31}
+
+
+def test_udre_index_buckets():
+    assert udre_index(0.5) == 0
+    assert udre_index(-1.0) == 0
+    assert udre_index(3.9) == 1
+    assert udre_index(7.5) == 2
+    assert udre_index(-50.0) == 3
+
+
+def test_corrections_set_udre_from_magnitude():
+    ephs = _ephemerides()
+    tow = 100200.0
+    # PRN 27 gets a ~6 m residual (relative to the others) -> UDRE bucket 2
+    extras = {3: 0.0, 11: 0.0, 19: 0.0, 27: 6.0, 31: 0.0}
+    prs = {p: _perfect_pr(ephs[p], tow, extras[p]) for p in ephs}
+    gen = DgpsGenerator()
+    gen.set_station(BASE)
+    for eph in ephs.values():
+        gen.add_ephemeris(eph)
+    corr = {c.prn: c for c in gen.corrections(tow, prs)}
+    for prn, c in corr.items():
+        assert c.udre == udre_index(c.prc)
+    assert corr[27].udre == 2

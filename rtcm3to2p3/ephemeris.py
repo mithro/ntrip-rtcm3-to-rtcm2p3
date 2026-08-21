@@ -30,7 +30,7 @@ class Ephemeris:
     """GPS broadcast ephemeris (Keplerian + clock), SI units / radians."""
 
     prn: int
-    week: int  # GPS week (full, not mod-1024) of toe
+    week: int  # GPS week of toe, as broadcast (RTCM3 1019 DF076 is mod-1024)
     toe: float  # time of ephemeris [s of week]
     sqrt_a: float  # sqrt semi-major axis [sqrt(m)]
     ecc: float  # eccentricity [-]
@@ -54,6 +54,8 @@ class Ephemeris:
     af2: float  # clock drift rate [s/s^2]
     tgd: float = 0.0  # group delay [s]
     iode: int = 0  # issue of data, ephemeris
+    health: int = 0  # SV health (0 = healthy)
+    ura: int = 0  # user range accuracy index
 
 
 def _delta_t_week(t: float, t_ref: float) -> float:
