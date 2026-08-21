@@ -1,11 +1,12 @@
 """Tests for GPS/RTCM 2.3 word parity.
 
-The reference implementation here is transcribed from RTKLIB's ``decode_word``
-(``rtcm.c``): its Hamming-table + popcount formulation is algorithmically
-*independent* of ``parity.py``'s position-list masks, so agreement between the
-two is a strong correctness signal beyond mere self-consistency. (Whole-message
-output is additionally validated against gpsd's ``gpsdecode``, RTKLIB, and the
-u-blox 7 hardware in the RTCM 2.3 encoder tests.)
+The reference here is transcribed from RTKLIB's ``decode_word`` (``rtcm.c``). Its
+Hamming-table + popcount *formulation* is a different implementation than
+``parity.py``'s position-list masks, so agreement catches coding/transcription
+bugs beyond mere self-consistency (both ultimately encode the same IS-GPS-200
+matrix, so this is not an independent-*spec* check). The authoritative
+independent-decoder validation of whole-message output happens against gpsd's
+``gpsdecode``, RTKLIB, and the u-blox 7 hardware in the RTCM 2.3 encoder tests.
 """
 import random
 
@@ -96,6 +97,19 @@ def test_single_bit_flip_breaks_parity():
     word, _, _ = encode_word(data, 0, 0)
     ok, _ = _rtklib_decode(word ^ (1 << 29), 0, 0)  # flip a data bit
     assert not ok
+
+
+def test_multiword_chaining_roundtrips():
+    """Chain encode_word across 12 words, feeding each word's D29/D30 into the
+    next, and decode every word with the independent RTKLIB decoder."""
+    rng = random.Random(99)
+    d29, d30 = 1, 1  # arbitrary non-zero initial seeds
+    for _ in range(12):
+        data = _rand_data(rng)
+        word, nd29, nd30 = encode_word(data, d29, d30)
+        ok, recovered = _rtklib_decode(word, d29, d30)
+        assert ok and recovered == data
+        d29, d30 = nd29, nd30
 
 
 def test_word_to_bits_length():
