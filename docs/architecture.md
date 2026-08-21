@@ -65,4 +65,22 @@ RTCM SC-104 v2.3 is a legacy bit-packed format ({mod}`rtcm3to2p3.rtcm2`):
 Type 1 carries two 24-bit header words (preamble, type, station id, modified
 Z-count, sequence, length, health) followed by 40-bit satellite records (scale,
 UDRE, PRN, PRC, RRC, IOD).
-```
+
+Type 3 (reference-station ARP) carries the same two header words followed by the
+base ECEF X, Y, Z as 32-bit signed integers in units of 0.01 m (four data
+words). It is emitted about once a minute so a rover can recover the base
+position; it shares the one encoder with Type 1 so the parity seed keeps
+chaining across the message boundary.
+
+## Scope and limitations
+
+* **GPS L1 C/A only.** Corrections are generated for GPS satellites from the
+  1077 (GPS MSM7) observation message; GLONASS/Galileo/BeiDou observations in the
+  upstream stream are relayed on the RTCM3 mount but not converted.
+* **One reference station.** A single base (from the upstream 1005/1006) feeds
+  the conversion; there is no multi-base networking or VRS.
+* **RTCM 2.3 Type 1 and Type 3.** Type 1 (pseudorange corrections) and Type 3
+  (reference-station ARP) are emitted; other RTCM 2.x message types are not.
+* **Satellite selection.** Satellites are skipped when their ephemeris is stale
+  (older than a configurable age), unhealthy (SV health flag set), or their raw
+  correction is an implausible outlier.

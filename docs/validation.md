@@ -12,7 +12,7 @@ self-consistency.
 | RTCM 2.3 encoder ({mod}`rtcm3to2p3.rtcm2`) | gpsd **`gpsdecode`** (external process, in CI) + an RTKLIB-derived decoder in-test |
 | RTCM 2.3 encoder | a real **u-blox 7** reports a DGPS fix from the output (hardware) |
 | Satellite position ({mod}`rtcm3to2p3.ephemeris`) | **gnss_lib_py** `find_sv_states` (Stanford NAV Lab), agreement ~2 mm |
-| Whole conversion ({mod}`rtcm3to2p3.dgps`) | live AUSCORS feed: raw corrections cluster < ~10 m |
+| Whole conversion ({mod}`rtcm3to2p3.dgps`) | live AUSCORS feed: raw corrections cluster < ~50 m |
 
 ## Word parity
 

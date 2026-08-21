@@ -5,13 +5,18 @@
 From the Debian apt repository (published via GitHub Pages):
 
 ```bash
-echo "deb [signed-by=/usr/share/keyrings/mithro-ntrip.gpg] \
-  https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/apt stable main" \
+# Signing key
+curl -fsSL https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/ntrip-rtcm3-to-rtcm2p3.gpg \
+  | sudo tee /etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg > /dev/null
+# apt source (flat repo at the site root)
+echo "deb [signed-by=/etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg] \
+  https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/ ./" \
   | sudo tee /etc/apt/sources.list.d/ntrip-rtcm3-to-rtcm2p3.list
-curl -fsSL https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/apt/KEY.gpg \
-  | sudo gpg --dearmor -o /usr/share/keyrings/mithro-ntrip.gpg
 sudo apt-get update && sudo apt-get install ntrip-rtcm3-to-rtcm2p3
 ```
+
+The repo also carries `python3-pyrtcm` and `python3-pynmeagps` (not yet in the
+main Debian archive), so `apt` resolves all dependencies from this one source.
 
 Or with `pip`/`uv` from source:
 
