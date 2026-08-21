@@ -10,6 +10,14 @@ import threading
 from .service import Config, Service
 
 
+def _station_id(value: str) -> int:
+    """argparse type: an RTCM 2.3 reference-station id, 1..1023."""
+    ivalue = int(value)
+    if not 1 <= ivalue <= 1023:
+        raise argparse.ArgumentTypeError(f"station id must be 1..1023, got {ivalue}")
+    return ivalue
+
+
 def _load_password(args: argparse.Namespace) -> str:
     if args.password:
         return args.password
@@ -40,10 +48,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--listen-port", type=int, default=d.listen_port)
     p.add_argument("--rtcm3-mount", default=d.rtcm3_mount)
     p.add_argument("--rtcm23-mount", default=d.rtcm23_mount)
-    p.add_argument("--station-id", type=int, default=d.station_id,
+    p.add_argument("--station-id", type=_station_id, default=d.station_id,
                    help="RTCM 2.3 reference-station id to emit (1..1023)")
     p.add_argument("--station-lat", type=float, default=d.station_lat)
     p.add_argument("--station-lon", type=float, default=d.station_lon)
+    p.add_argument("--max-iod-age", type=float, default=d.max_iod_age_s,
+                   help="drop corrections from ephemeris older than this many seconds")
+    p.add_argument("--max-residual", type=float, default=d.max_residual_m,
+                   help="drop corrections whose residual exceeds this many metres")
     p.add_argument("--log-level", default="INFO")
     return p
 
@@ -67,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
         station_id=args.station_id,
         station_lat=args.station_lat,
         station_lon=args.station_lon,
+        max_iod_age_s=args.max_iod_age,
+        max_residual_m=args.max_residual,
     )
     logging.info("caster on %s:%d  mounts=%s,%s  upstream=%s:%d/%s,%s",
                  config.listen_addresses, config.listen_port, config.rtcm3_mount,
