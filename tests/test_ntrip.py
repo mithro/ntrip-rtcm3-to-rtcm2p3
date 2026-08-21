@@ -149,6 +149,20 @@ def test_connect_rejects_sourcetable_response():
         srv.close()
 
 
+def test_connect_raises_on_truncated_http_header():
+    # An HTTP/1.1 200 status line followed by an immediate close (no blank line)
+    # must raise, not spin forever draining headers on repeated empty recv().
+    port = _free_port()
+    srv = _raw_server(port, b"HTTP/1.1 200 OK\r\n")  # status line, then EOF
+    try:
+        time.sleep(0.1)
+        client = NtripClient("127.0.0.1", port, "GOOD", timeout=3)
+        with pytest.raises(OSError):
+            client._connect()
+    finally:
+        srv.close()
+
+
 def test_connect_accepts_icy_200():
     # The NTRIP v1 status line "ICY 200 OK" is a valid stream start.
     port = _free_port()

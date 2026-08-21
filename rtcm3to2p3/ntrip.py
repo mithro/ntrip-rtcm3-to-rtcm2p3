@@ -125,7 +125,10 @@ class NtripClient:
         if status.startswith(b"HTTP"):  # drain remaining HTTP headers
             hdr = status
             while b"\r\n\r\n" not in hdr:
-                hdr += sock.recv(1)
+                b = sock.recv(1)
+                if not b:  # upstream closed mid-header -> don't spin forever
+                    raise OSError("connection closed during HTTP headers")
+                hdr += b
         return sock
 
     def stream(self, on_data: Callable[[bytes], None], stop: threading.Event) -> None:
