@@ -19,10 +19,13 @@ This project does that computation and re-serves both streams on the LAN.
 
 ## Verified end-to-end
 
-The generated corrections were fed to a real **u-blox 7**, which reported a
-**differential (DGPS) fix** — ground-truth proof the output is receiver-usable.
-Every stage is additionally cross-checked against independent implementations
-(gpsd's `gpsdecode`, RTKLIB, gnss_lib_py). See {doc}`validation`.
+Every conversion stage is cross-checked in the automated test suite against
+independent implementations — gpsd's `gpsdecode` and an RTKLIB-derived decoder
+(RTCM 2.3 output), gnss_lib_py (satellite position **and** clock), and RTKLIB
+`str2str` (NTRIP transport). As a hardware check, feeding the generated
+corrections to a real **u-blox 7** produced a differential (DGPS) fix; that step
+is manual (it needs the receiver on a serial port) and is reproduced by
+`scripts/validate_ublox_hardware.py`, not run in CI. See {doc}`validation`.
 
 ```{toctree}
 :maxdepth: 2

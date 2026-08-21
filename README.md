@@ -5,8 +5,8 @@ reference stream into **RTCM 2.3** DGPS corrections, so that legacy single-band
 receivers that only understand RTCM 2.3 (e.g. u-blox 7) can benefit from a modern
 RTCM3-only correction network.
 
-> **Status: work in progress.** Built incrementally with a full test suite. See
-> the commit history for the staged build.
+> Built incrementally with a full test suite; every conversion stage is
+> cross-checked against independent implementations (see the Validation docs).
 
 ## Why
 
