@@ -48,7 +48,7 @@ def extract_rtcm3_frames(buf: bytearray) -> list[bytes]:
 class Converter:
     """Turns an RTCM3 observation stream into RTCM 2.3 corrections."""
 
-    def __init__(self, rtcm3_feed: Feed, rtcm23_feed: Feed) -> None:
+    def __init__(self, rtcm3_feed: Feed, rtcm23_feed: Feed, station_id: int = 1023) -> None:
         self.rtcm3_feed = rtcm3_feed
         self.rtcm23_feed = rtcm23_feed
         self.gen = DgpsGenerator()
@@ -56,7 +56,11 @@ class Converter:
         self._obs_buf = bytearray()
         self._eph_buf = bytearray()
         self._seq = 0
-        self.station_id = 0
+        # The RTCM 2.3 reference-station ID we emit. It is an identifier only; we
+        # do NOT inherit the upstream base's DF003 because some casters send 0,
+        # and station id 0/2 trips gpsdecode's initial stream sync (the content is
+        # valid RTCM2 -- gpsd just can't lock onto a stream that *starts* with it).
+        self.station_id = station_id & 0x3FF
         self.messages_out = 0
 
     def feed_obs(self, data: bytes) -> None:
@@ -79,7 +83,6 @@ class Converter:
             return
         if msg.identity in STATION_MESSAGES:
             self.gen.set_station(parse_station(msg))
-            self.station_id = int(getattr(msg, "DF003", 0)) & 0x3FF
         elif msg.identity == GPS_MSM7:
             tow, pseudoranges = parse_gps_msm7(msg)
             corrections = self.gen.corrections(tow, pseudoranges)
@@ -115,6 +118,7 @@ class Config:
     listen_port: int = 2101
     rtcm3_mount: str = "ADDE_RTCM3"
     rtcm23_mount: str = "ADDE_RTCM23"
+    station_id: int = 1023  # RTCM 2.3 reference-station id we emit (1..1023)
     station_lat: float = -34.94
     station_lon: float = 138.58
 
@@ -126,7 +130,8 @@ class Service:
         self.config = config
         self.rtcm3_feed = Feed(config.rtcm3_mount)
         self.rtcm23_feed = Feed(config.rtcm23_mount)
-        self.converter = Converter(self.rtcm3_feed, self.rtcm23_feed)
+        self.converter = Converter(self.rtcm3_feed, self.rtcm23_feed,
+                                   station_id=config.station_id)
         self.caster = NtripCaster(port=config.listen_port)
         self.caster.add_feed(self.rtcm3_feed, MountInfo(
             mount=config.rtcm3_mount, fmt="RTCM 3",

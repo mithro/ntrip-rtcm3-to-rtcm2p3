@@ -40,6 +40,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--listen-port", type=int, default=d.listen_port)
     p.add_argument("--rtcm3-mount", default=d.rtcm3_mount)
     p.add_argument("--rtcm23-mount", default=d.rtcm23_mount)
+    p.add_argument("--station-id", type=int, default=d.station_id,
+                   help="RTCM 2.3 reference-station id to emit (1..1023)")
     p.add_argument("--station-lat", type=float, default=d.station_lat)
     p.add_argument("--station-lon", type=float, default=d.station_lon)
     p.add_argument("--log-level", default="INFO")
@@ -62,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         listen_port=args.listen_port,
         rtcm3_mount=args.rtcm3_mount,
         rtcm23_mount=args.rtcm23_mount,
+        station_id=args.station_id,
         station_lat=args.station_lat,
         station_lon=args.station_lon,
     )
