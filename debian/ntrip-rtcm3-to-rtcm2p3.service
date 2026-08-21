@@ -1,6 +1,6 @@
 [Unit]
 Description=NTRIP rebroadcaster with RTCM3 to RTCM 2.3 DGPS conversion
-Documentation=https://ntrip-rtcm3-to-rtcm2p3.readthedocs.io
+Documentation=https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/docs/
 After=network-online.target
 Wants=network-online.target
 

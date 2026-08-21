@@ -28,6 +28,16 @@ jobs:
           pip install --break-system-packages '.[dev]'
           python3 -m pytest
 
+      - name: Build the Sphinx documentation
+        run: |
+          pip install --break-system-packages '.[docs]'
+          python3 -m sphinx -b html -W docs docs-site
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-site
+          path: docs-site/
+
       - name: Build this package
         run: dpkg-buildpackage -us -uc -b
 
@@ -67,6 +77,12 @@ jobs:
         with:
           name: debs
           path: apt-repo/
+
+      - name: Add the rendered documentation under /docs
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-site
+          path: apt-repo/docs/
 
       - name: Generate apt repo metadata
         run: |
@@ -131,7 +147,9 @@ jobs:
           {
             echo '<!DOCTYPE html><html>'
             echo '<head><title>ntrip-rtcm3-to-rtcm2p3 apt repository</title></head>'
-            echo '<body><h1>ntrip-rtcm3-to-rtcm2p3 apt repository</h1><h2>Setup</h2><pre>'
+            echo '<body><h1>ntrip-rtcm3-to-rtcm2p3</h1>'
+            echo '<p>📖 <a href="docs/">Documentation</a></p>'
+            echo '<h2>apt repository</h2><pre>'
             printf '%s\n' "$setup"
             echo '</pre></body></html>'
           } > apt-repo/index.html

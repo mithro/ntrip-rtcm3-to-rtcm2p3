@@ -8,6 +8,8 @@ RTCM3-only correction network.
 > Built incrementally with a full test suite; every conversion stage is
 > cross-checked against independent implementations (see the Validation docs).
 
+📖 **[Documentation](https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/docs/)** (rendered from `docs/`; the same Sphinx site can also be hosted on Read the Docs).
+
 ## Why
 
 Modern correction networks (e.g. Geoscience Australia's AUSCORS) broadcast
