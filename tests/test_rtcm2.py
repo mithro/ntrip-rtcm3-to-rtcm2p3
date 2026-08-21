@@ -87,7 +87,8 @@ def decode_rtcm2(data):
             if nbyte < length:
                 continue
             nbyte, word = 0, word & 0x3
-            out.append(_parse_type1(buff))
+            mtype = _getbits(buff, 8, 6, False)
+            out.append(_parse_type3(buff) if mtype == 3 else _parse_type1(buff))
     return out
 
 
@@ -114,6 +115,79 @@ def _parse_type1(buff):
             {"prn": prn, "udre": udre, "prc": prc, "rrc": rrc, "iod": iod, "scale": scale}
         )
     return msg
+
+
+def _parse_type3(buff):
+    # ECEF X/Y/Z as 32-bit signed integers * 0.01 m (RTKLIB decode_type3).
+    return {
+        "type": _getbits(buff, 8, 6, False),
+        "station_id": _getbits(buff, 14, 10, False),
+        "zcount": _getbits(buff, 24, 13, False),
+        "seq": _getbits(buff, 37, 3, False),
+        "length": _getbits(buff, 40, 5, False),
+        "health": _getbits(buff, 45, 3, False),
+        "ecef": (
+            _getbits(buff, 48, 32, True) * 0.01,
+            _getbits(buff, 80, 32, True) * 0.01,
+            _getbits(buff, 112, 32, True) * 0.01,
+        ),
+    }
+
+
+# --- word-aligned parity validator (IS-GPS-200 Table 20-XIV) ----------------
+# A third, independent check that cannot false-lock: it de-frames the 6-of-8
+# bytes to a bit stream and walks it in fixed 30-bit words from the start,
+# recomputing each word's six parity bits directly from the standard equations
+# (over the *source* data d_i = D_i XOR D30*) and the running D29*/D30* seed.
+_PARITY_EQ = {
+    25: [1, 2, 3, 5, 6, 10, 11, 12, 13, 14, 17, 18, 20, 23],
+    26: [2, 3, 4, 6, 7, 11, 12, 13, 14, 15, 18, 19, 21, 24],
+    27: [1, 3, 4, 5, 7, 8, 12, 13, 14, 15, 16, 19, 20, 22],
+    28: [2, 4, 5, 6, 8, 9, 13, 14, 15, 16, 17, 20, 21, 23],
+    29: [1, 3, 5, 6, 7, 9, 10, 14, 15, 16, 17, 18, 21, 22, 24],
+    30: [3, 5, 6, 8, 9, 10, 11, 13, 15, 19, 22, 23, 24],
+}
+_PARITY_SEED = {25: "d29", 26: "d30", 27: "d29", 28: "d30", 29: "d30", 30: "d29"}
+
+
+def deframe_bits(data):
+    """6-of-8 wire bytes -> list of data bits (MSB-first within each group)."""
+    bits = []
+    for raw in data:
+        if (raw & 0xC0) != 0x40:
+            continue
+        group = sum(((raw >> i) & 1) << (5 - i) for i in range(6))  # un-reverse
+        bits.extend((group >> (5 - i)) & 1 for i in range(6))
+    return bits
+
+
+def parity_violations(data):
+    """Return the count of 30-bit words whose parity is inconsistent."""
+    bits = deframe_bits(data)
+    d29 = d30 = 0
+    bad = 0
+    for w in range(0, len(bits) - len(bits) % 30, 30):
+        big = [0] + bits[w:w + 30]  # 1-indexed D1..D30
+        d = [0] + [big[i] ^ d30 for i in range(1, 25)]  # source data bits
+        for k in range(25, 31):
+            v = d29 if _PARITY_SEED[k] == "d29" else d30
+            for idx in _PARITY_EQ[k]:
+                v ^= d[idx]
+            if v != big[k]:
+                bad += 1
+                break
+        d29, d30 = big[29], big[30]
+    return bad
+
+
+def test_parity_validator_rejects_corruption():
+    # sanity: flipping one wire byte must make the validator report a violation
+    enc = Rtcm2Encoder()
+    good = enc.encode_type1(42, 100, 0, 0, CORR)
+    assert parity_violations(good) == 0
+    corrupt = bytearray(good)
+    corrupt[7] ^= 0x01
+    assert parity_violations(bytes(corrupt)) > 0
 
 
 # --- tests ------------------------------------------------------------------
@@ -202,6 +276,79 @@ def test_never_emits_sentinel_values():
     assert s0["prc"] * PRC_SCALE[s0["scale"]] == pytest.approx(-655.36, abs=0.32)
     assert m["sats"][1]["prc"] == 32767 and m["sats"][1]["rrc"] == 127  # clamped positive max
     assert m["sats"][2]["prc"] == -32767 and m["sats"][2]["rrc"] == -127  # clamped, not sentinel
+
+
+# Adelaide (ADDE) reference-station antenna reference point, ECEF metres.
+_ADDE_ECEF = (-3924917.30, 3462747.06, -3632703.99)
+
+
+def test_type3_independent_decoder_roundtrip():
+    enc = Rtcm2Encoder()
+    data = b"".join(enc.encode_type3(42, 100 + k, k % 8, 0, _ADDE_ECEF) for k in range(3))
+    msgs = decode_rtcm2(data)
+    assert len(msgs) == 3
+    m = msgs[0]
+    assert m["type"] == 3 and m["station_id"] == 42 and m["length"] == 4
+    for got, want in zip(m["ecef"], _ADDE_ECEF, strict=True):
+        assert got == pytest.approx(want, abs=0.01)
+
+
+def _interleaved_stream():
+    enc = Rtcm2Encoder()
+    data = b""
+    for k in range(3):
+        data += enc.encode_type3(7, k, (2 * k) % 8, 0, _ADDE_ECEF)
+        data += enc.encode_type1(7, k, (2 * k + 1) % 8, 0, CORR)
+    return data
+
+
+def test_type1_type3_interleaved_parity_chain():
+    # Type 3 and Type 1 on one encoder: the parity seed must chain across every
+    # message boundary. The word-aligned IS-GPS-200 validator confirms every
+    # word (including the header words straddling the Type3/Type1 seam) is valid.
+    assert parity_violations(_interleaved_stream()) == 0
+
+
+@pytest.mark.skipif(shutil.which("gpsdecode") is None, reason="gpsdecode not installed")
+def test_type1_type3_interleaved_gpsdecode():
+    # gpsd's external decoder recovers all six messages in the correct order from
+    # the continuous interleaved stream.
+    p = subprocess.run(["gpsdecode"], input=_interleaved_stream(),
+                       capture_output=True, timeout=15)
+    msgs = [json.loads(ln) for ln in p.stdout.decode().splitlines() if ln.strip()]
+    rtcm = [m for m in msgs if m.get("class") == "RTCM2"]
+    assert [m["type"] for m in rtcm] == [3, 1, 3, 1, 3, 1]
+    assert rtcm[0]["x"] == pytest.approx(_ADDE_ECEF[0], abs=0.01)
+    assert {s["ident"] for s in rtcm[1]["satellites"]} == {5, 12, 0}
+
+
+@pytest.mark.skipif(shutil.which("gpsdecode") is None, reason="gpsdecode not installed")
+def test_type3_gpsdecode_roundtrip():
+    enc = Rtcm2Encoder()
+    data = b"".join(enc.encode_type3(42, 100 + k, k % 8, 0, _ADDE_ECEF) for k in range(4))
+    p = subprocess.run(["gpsdecode"], input=data, capture_output=True, timeout=15)
+    msgs = [json.loads(ln) for ln in p.stdout.decode().splitlines() if ln.strip()]
+    rtcm = [m for m in msgs if m.get("class") == "RTCM2" and m.get("type") == 3]
+    assert len(rtcm) == 4
+    m = rtcm[0]
+    assert m["station_id"] == 42
+    assert m["x"] == pytest.approx(_ADDE_ECEF[0], abs=0.01)
+    assert m["y"] == pytest.approx(_ADDE_ECEF[1], abs=0.01)
+    assert m["z"] == pytest.approx(_ADDE_ECEF[2], abs=0.01)
+
+
+def test_type3_field_range_errors():
+    enc = Rtcm2Encoder()
+    bad_calls = [
+        lambda: enc.encode_type3(2000, 0, 0, 0, _ADDE_ECEF),  # station_id > 1023
+        lambda: enc.encode_type3(1, 9999, 0, 0, _ADDE_ECEF),  # zcount > 8191
+        lambda: enc.encode_type3(1, 0, 9, 0, _ADDE_ECEF),  # seq > 7
+        lambda: enc.encode_type3(1, 0, 0, 9, _ADDE_ECEF),  # health > 7
+        lambda: enc.encode_type3(1, 0, 0, 0, (3e7, 0.0, 0.0)),  # ECEF > 2^31 counts
+    ]
+    for call in bad_calls:
+        with pytest.raises(ValueError):
+            call()
 
 
 def test_field_range_errors():

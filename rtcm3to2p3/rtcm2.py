@@ -16,6 +16,10 @@ Type 1 (Differential GPS Corrections) layout — two 24-bit header words then N
 * Word 2: modified Z-count(13) · sequence no(3) · N data words(5) · station health(3)
 * Per satellite (40 bits): scale factor(1) · UDRE(2) · PRN(5, 0=>32) ·
   PRC(16 signed) · RRC(8 signed) · IOD(8). PRC scale 0.02/0.32 m, RRC 0.002/0.032 m/s.
+
+Type 3 (Reference Station Parameters) — the two header words then ECEF X, Y, Z as
+32-bit signed integers in units of 0.01 m (N=4). It lets a rover recover the base
+station's antenna reference point without a separate almanac.
 """
 from __future__ import annotations
 
@@ -28,6 +32,9 @@ from .parity import WORD_BITS, WORD_DATA_BITS, encode_word
 
 PREAMBLE = 0x66
 RTCM2_TYPE1 = 1
+RTCM2_TYPE3 = 3
+_ECEF_SCALE = 0.01  # metres per LSB of a Type 3 ECEF coordinate
+_ECEF_MAX = (1 << 31) - 1
 
 PRC_SCALE = (0.02, 0.32)  # metres per LSB, indexed by scale factor bit
 RRC_SCALE = (0.002, 0.032)  # metres/second per LSB
@@ -116,6 +123,45 @@ def _pack_type1_body(
     return [reader.read_unsigned(WORD_DATA_BITS) for _ in range(total_bits // WORD_DATA_BITS)]
 
 
+def _pack_type3_body(
+    station_id: int, zcount: int, seq: int, health: int,
+    ecef: tuple[float, float, float],
+) -> list[int]:
+    """Build a Type 3 (reference-station ARP) message as 24-bit data words.
+
+    Layout: the two 24-bit header words (as Type 1 but message type 3), then
+    ECEF X, Y, Z each as a 32-bit signed integer in units of 0.01 m — 96 data
+    bits = exactly four 24-bit words, so N is always 4 and there are no fill
+    bits. Verified against RTKLIB ``decode_type3`` (pos = getbits(...,32)*0.01).
+    """
+    if not 0 <= station_id < (1 << 10):
+        raise ValueError("station_id out of range 0..1023")
+    if not 0 <= zcount < 8192:
+        raise ValueError("zcount out of range 0..8191")
+    if not 0 <= seq < 8:
+        raise ValueError("seq out of range 0..7")
+    if not 0 <= health < 8:
+        raise ValueError("health out of range 0..7")
+
+    stream = BitWriter()
+    stream.write_unsigned(PREAMBLE, 8)
+    stream.write_unsigned(RTCM2_TYPE3, 6)
+    stream.write_unsigned(station_id, 10)
+    stream.write_unsigned(zcount, 13)
+    stream.write_unsigned(seq, 3)
+    stream.write_unsigned(4, 5)  # N = 4 data words (ECEF is always 96 bits)
+    stream.write_unsigned(health, 3)
+    for coord in ecef:
+        counts = round(coord / _ECEF_SCALE)
+        if not -_ECEF_MAX - 1 <= counts <= _ECEF_MAX:
+            raise ValueError(f"ECEF coordinate out of 32-bit range: {coord} m")
+        stream.write_signed(counts, 32)
+
+    total_bits = 48 + 4 * WORD_DATA_BITS  # 144 bits, no padding needed
+    reader = BitReader(stream.to_bytes())
+    return [reader.read_unsigned(WORD_DATA_BITS) for _ in range(total_bits // WORD_DATA_BITS)]
+
+
 def _reverse6(value: int) -> int:
     return sum(((value >> i) & 1) << (5 - i) for i in range(6))
 
@@ -156,4 +202,17 @@ class Rtcm2Encoder:
         """Encode one Type 1 (DGPS corrections) message to wire bytes."""
         return self.encode_words(
             _pack_type1_body(station_id, zcount, seq, health, corrections)
+        )
+
+    def encode_type3(
+        self,
+        station_id: int,
+        zcount: int,
+        seq: int,
+        health: int,
+        ecef: tuple[float, float, float],
+    ) -> bytes:
+        """Encode one Type 3 (reference-station ARP position) message."""
+        return self.encode_words(
+            _pack_type3_body(station_id, zcount, seq, health, ecef)
         )
