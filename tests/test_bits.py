@@ -29,7 +29,9 @@ def test_byte_aligned_roundtrip():
     assert r.read_unsigned(8) == 0xCD
 
 
-@pytest.mark.parametrize("nbits", range(1, 40))
+# widths past 64 bits guard against a future fixed-width "optimization" silently
+# truncating (RTCM 2.3 has no >64-bit fields, but this layer promises arbitrary width)
+@pytest.mark.parametrize("nbits", [*range(1, 40), 63, 64, 65, 96, 128])
 def test_unsigned_roundtrip_widths(nbits):
     values = [0, 1, (1 << nbits) - 1, (1 << nbits) // 3]
     w = BitWriter()
@@ -40,7 +42,7 @@ def test_unsigned_roundtrip_widths(nbits):
         assert r.read_unsigned(nbits) == v
 
 
-@pytest.mark.parametrize("nbits", range(1, 40))
+@pytest.mark.parametrize("nbits", [*range(1, 40), 63, 64, 65, 96, 128])
 def test_signed_roundtrip_widths(nbits):
     lo, hi = -(1 << (nbits - 1)), (1 << (nbits - 1)) - 1
     values = [lo, hi, -1, 0]
