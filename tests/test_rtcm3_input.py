@@ -53,9 +53,10 @@ def test_parse_ephemeris_units_and_orbit():
 def _msm7_mock():
     return SimpleNamespace(
         DF004=483948000,  # TOW ms
-        DF397_01=67, DF398_01=0.9951171875,
-        DF397_02=68, DF398_02=0.4736328125,
-        DF397_03=255, DF398_03=0.0,  # PRN 3: invalid integer ms -> dropped
+        # PRN_<nn> gives each satellite-mask slot's PRN (as pyrtcm does)
+        PRN_01="001", DF397_01=67, DF398_01=0.9951171875,
+        PRN_02="002", DF397_02=68, DF398_02=0.4736328125,
+        PRN_03="003", DF397_03=255, DF398_03=0.0,  # PRN 3: invalid int ms -> dropped
         CELLPRN_01="001", CELLSIG_01="1C", DF405_01=0.00044626370072364807,
         CELLPRN_02="001", CELLSIG_02="2W", DF405_02=0.0005,  # L2, skipped
         CELLPRN_03="002", CELLSIG_03="1C", DF405_03=0.00047195330262184143,
@@ -72,3 +73,22 @@ def test_parse_gps_msm7_reconstruction():
     assert prs[2] == pytest.approx((68 + 0.4736328125 + 0.00047195330262184143) * ms_to_m)
     # sanity: GPS pseudoranges are ~20 000-25 000 km
     assert all(19_000e3 < p < 26_000e3 for p in prs.values())
+
+
+def test_parse_gps_msm7_masked_sat_without_cells():
+    # PRN 2 is in the satellite mask (slot 2) but has NO signal cells (legal MSM).
+    # The rough range for PRN 3 (slot 3) must still be read from slot 3, not
+    # shifted onto slot 2's value by cell-order inference.
+    msg = SimpleNamespace(
+        DF004=483948000,
+        PRN_01="001", DF397_01=70, DF398_01=0.0,
+        PRN_02="002", DF397_02=80, DF398_02=0.0,  # PRN 2: no cell below
+        PRN_03="003", DF397_03=90, DF398_03=0.0,
+        CELLPRN_01="001", CELLSIG_01="1C", DF405_01=0.0,
+        CELLPRN_02="003", CELLSIG_02="1C", DF405_02=0.0,
+    )
+    _, prs = parse_gps_msm7(msg)
+    ms_to_m = C * 1e-3
+    assert set(prs) == {1, 3}  # PRN 2 has no cell -> no pseudorange
+    assert prs[1] == pytest.approx(70 * ms_to_m)
+    assert prs[3] == pytest.approx(90 * ms_to_m)  # slot 3's 90 ms, NOT PRN 2's 80

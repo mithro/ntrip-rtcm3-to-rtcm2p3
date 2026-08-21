@@ -79,20 +79,18 @@ def parse_gps_msm7(msg) -> tuple[float, dict[int, float]]:
     """
     tow = float(msg.DF004) / 1000.0
     n_sat = _count(msg, "DF397_")
-    rough = {}
+    # Rough range per satellite, keyed by PRN. pyrtcm exposes PRN_<nn> for each
+    # satellite-mask slot, so we map slot -> PRN directly rather than inferring it
+    # from cell order (which is wrong when a masked satellite has no signal cells).
+    rough: dict[int, float] = {}
     for i in range(1, n_sat + 1):
         int_ms = getattr(msg, f"DF397_{i:02d}")
         if int_ms >= 255:  # DF397 == 255 => invalid/no range
             continue
-        rough[i] = int_ms + getattr(msg, f"DF398_{i:02d}")
+        prn = int(getattr(msg, f"PRN_{i:02d}"))
+        rough[prn] = int_ms + getattr(msg, f"DF398_{i:02d}")
 
     n_cell = _count(msg, "DF405_")
-    sat_order: list[int] = []
-    for i in range(1, n_cell + 1):
-        prn = int(getattr(msg, f"CELLPRN_{i:02d}"))
-        if prn not in sat_order:
-            sat_order.append(prn)
-
     pseudoranges: dict[int, float] = {}
     for i in range(1, n_cell + 1):
         if getattr(msg, f"CELLSIG_{i:02d}") != _L1CA:
@@ -101,8 +99,7 @@ def parse_gps_msm7(msg) -> tuple[float, dict[int, float]]:
         if fine is None:
             continue
         prn = int(getattr(msg, f"CELLPRN_{i:02d}"))
-        sat_idx = sat_order.index(prn) + 1
-        if sat_idx not in rough:
+        if prn not in rough:
             continue
-        pseudoranges[prn] = (rough[sat_idx] + fine) * _MS_TO_M
+        pseudoranges[prn] = (rough[prn] + fine) * _MS_TO_M
     return tow, pseudoranges
