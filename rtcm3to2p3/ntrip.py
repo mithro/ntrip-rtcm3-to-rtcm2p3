@@ -13,6 +13,7 @@ public interface.
 from __future__ import annotations
 
 import base64
+import logging
 import queue
 import socket
 import ssl
@@ -21,6 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 _CRLF = b"\r\n"
+logger = logging.getLogger(__name__)
 
 
 class Feed:
@@ -111,8 +113,15 @@ class NtripClient:
             if not b:
                 raise OSError("connection closed during response header")
             status += b
-        if b"200" not in status:
-            raise OSError(f"upstream status: {status.decode(errors='replace').strip()}")
+        line = status.strip()
+        # Only an ICY/HTTP 200 is a data stream. A caster answers a *bad*
+        # mountpoint with "SOURCETABLE 200 OK", which must NOT be mistaken for a
+        # stream (its body is ASCII, not RTCM3).
+        http_ok = line.startswith(b"HTTP/1") and line.split(b" ")[1:2] == [b"200"]
+        if not (line.startswith(b"ICY 200") or http_ok):
+            raise OSError(
+                f"upstream did not start a stream (mount '{self.mountpoint}'?): "
+                f"{line.decode(errors='replace')}")
         if status.startswith(b"HTTP"):  # drain remaining HTTP headers
             hdr = status
             while b"\r\n\r\n" not in hdr:
@@ -125,6 +134,7 @@ class NtripClient:
         while not stop.is_set():
             try:
                 sock = self._connect()
+                logger.info("connected to %s:%d/%s", self.host, self.port, self.mountpoint)
                 backoff = 2.0
                 while not stop.is_set():
                     data = sock.recv(4096)
@@ -132,7 +142,9 @@ class NtripClient:
                         raise OSError("upstream closed")
                     on_data(data)
                 sock.close()
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 -- reconnect on any failure
+                logger.warning("%s:%d/%s: %s; reconnecting in %.0fs",
+                               self.host, self.port, self.mountpoint, exc, backoff)
                 if stop.wait(backoff):
                     return
                 backoff = min(backoff * 2, 30.0)
@@ -183,7 +195,8 @@ class NtripCaster:
                              f"{self.server}\r\nContent-Type: gnss/data\r\nConnection: "
                              f"close\r\n\r\n".encode())
             else:
-                conn.sendall(b"ICY 200 OK\r\n\r\n")
+                conn.sendall(b"ICY 200 OK\r\n")  # NTRIP1: status line then raw data
+            logger.info("caster: client %s subscribed to /%s", addr[0], mount)
             q = feed.subscribe()
             try:
                 while not self._stop.is_set():

@@ -7,7 +7,30 @@ import socket
 import threading
 import time
 
+import pytest
+
 from rtcm3to2p3.ntrip import Feed, MountInfo, NtripCaster, NtripClient
+
+
+def _raw_server(port: int, response: bytes) -> socket.socket:
+    """A one-shot server that sends ``response`` then holds the connection open."""
+    srv = socket.socket()
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", port))
+    srv.listen(1)
+
+    def serve():
+        try:
+            conn, _ = srv.accept()
+            conn.recv(4096)
+            conn.sendall(response)
+            time.sleep(0.3)
+            conn.close()
+        except OSError:
+            pass
+
+    threading.Thread(target=serve, daemon=True).start()
+    return srv
 
 
 def _free_port() -> int:
@@ -109,3 +132,31 @@ def test_client_rejects_missing_mount_with_sourcetable():
     finally:
         caster.stop()
     assert b"SOURCETABLE 200 OK" in data
+
+
+def test_connect_rejects_sourcetable_response():
+    # A caster answers a *bad* mount with "SOURCETABLE 200 OK". _connect must NOT
+    # treat that as a data stream -- its body is an ASCII sourcetable, not RTCM3.
+    port = _free_port()
+    srv = _raw_server(port, b"SOURCETABLE 200 OK\r\nServer: x\r\n"
+                            b"Content-Type: gnss/sourcetable\r\n\r\nENDSOURCETABLE\r\n")
+    try:
+        time.sleep(0.1)
+        client = NtripClient("127.0.0.1", port, "BADMOUNT", timeout=3)
+        with pytest.raises(OSError):
+            client._connect()
+    finally:
+        srv.close()
+
+
+def test_connect_accepts_icy_200():
+    # The NTRIP v1 status line "ICY 200 OK" is a valid stream start.
+    port = _free_port()
+    srv = _raw_server(port, b"ICY 200 OK\r\n\xd3\x00\x01\x00abc")
+    try:
+        time.sleep(0.1)
+        client = NtripClient("127.0.0.1", port, "GOOD", timeout=3)
+        sock = client._connect()  # must not raise
+        sock.close()
+    finally:
+        srv.close()
