@@ -1,11 +1,19 @@
 """Interoperability with non-Python NTRIP implementations.
 
-Our NTRIP client and caster are exercised against RTKLIB's ``str2str`` (a
-separate C implementation): str2str pulls a mount from our caster, and our client
-pulls a mount from a str2str caster. Skipped when str2str is not installed.
+Our NTRIP client and caster are exercised against separate, non-Python NTRIP
+software:
 
-(The RTCM 2.3 *output* is decoded by the non-Python gpsd ``gpsdecode`` in
-tests/test_rtcm2.py, and by a real u-blox 7 in scripts/validate_ublox_hardware.py.)
+* **RTKLIB ``str2str``** (C): str2str pulls a mount from our caster, and our
+  client pulls a mount from a str2str caster. Skipped when str2str is absent.
+* **BKG NTRIP Client ``bnc``** (C++/Qt): headless ``bnc --conf ... --nw`` pulls a
+  mount from our caster and stores the raw stream. Skipped when ``bnc`` is absent.
+* **wangkanai/caster** (.NET): our client pulls a mount from a running instance
+  pointed to by the ``WANGKANAI_CASTER`` env var (``host:port/MOUNT``). Skipped
+  when it is not set. See docs/validation.md for how to launch it.
+
+(The RTCM 2.3 *output* is additionally decoded by the non-Python gpsd
+``gpsdecode`` in tests/test_rtcm2.py, and by a real u-blox 7 in
+scripts/validate_ublox_hardware.py.)
 """
 import os
 import shutil
@@ -20,6 +28,8 @@ import pytest
 from rtcm3to2p3.ntrip import Feed, MountInfo, NtripCaster, NtripClient
 
 STR2STR = shutil.which("str2str")
+BNC = shutil.which("bnc")
+WANGKANAI_CASTER = os.environ.get("WANGKANAI_CASTER")  # "host:port/MOUNT"
 _RTCM3ish = b"\xd3\x00\x04TEST\x11\x22\x33"
 
 
@@ -106,3 +116,68 @@ def test_our_client_pulls_from_str2str_caster():
         if push:
             push.close()
     assert b"TEST" in bytes(got)  # our client received RTKLIB's caster stream
+
+
+@pytest.mark.skipif(not BNC, reason="BKG NTRIP Client (bnc) not installed")
+def test_bnc_pulls_from_our_caster(tmp_path):
+    # BNC (a separate C++/Qt implementation) subscribes to our caster headlessly
+    # and writes the raw stream to a file; we assert our bytes made the round trip.
+    port = _free_port()
+    caster = NtripCaster(port=port)
+    feed = Feed("TEST")
+    caster.add_feed(feed, MountInfo(mount="TEST"))
+    caster.start(["127.0.0.1"])
+    stop = threading.Event()
+
+    def publisher():
+        while not stop.is_set():
+            feed.publish(_RTCM3ish)
+            time.sleep(0.05)
+
+    raw_out = tmp_path / "bnc_raw.bin"
+    conf = tmp_path / "bnc.conf"
+    # mountPoints value: //user:pass@host:port/MOUNT format lat lon nmea ntripVer
+    conf.write_text(
+        "[General]\n"
+        f"mountPoints=//:@127.0.0.1:{port}/TEST RTCM_3.3 -34.9 138.6 no 2\n"
+        f"rawOutFile={raw_out}\n"
+        f"logFile={tmp_path / 'bnc.log'}\n"
+        "autoStart=1\n"
+    )
+    try:
+        time.sleep(0.3)
+        threading.Thread(target=publisher, daemon=True).start()
+        try:
+            # --nw runs until killed; let it collect a few seconds then time out.
+            subprocess.run([BNC, "--conf", str(conf), "--nw"], timeout=6,
+                           capture_output=True)
+        except subprocess.TimeoutExpired:
+            pass
+        data = raw_out.read_bytes() if raw_out.exists() else b""
+    finally:
+        stop.set()
+        caster.stop()
+    assert b"TEST" in data  # BNC received and stored our RTCM stream
+
+
+@pytest.mark.skipif(not WANGKANAI_CASTER,
+                    reason="WANGKANAI_CASTER not set (host:port/MOUNT)")
+def test_our_client_pulls_from_wangkanai_caster():
+    # Our client pulls from a running wangkanai/caster (.NET) instance the operator
+    # launched and pointed us at via WANGKANAI_CASTER=host:port/MOUNT.
+    hostport, _, mount = WANGKANAI_CASTER.partition("/")
+    host, _, port_s = hostport.partition(":")
+    got = bytearray()
+    stop = threading.Event()
+
+    def on_data(d: bytes) -> None:
+        got.extend(d)
+        if len(got) > 8:
+            stop.set()
+
+    client = NtripClient(host, int(port_s), mount)
+    t = threading.Thread(target=client.stream, args=(on_data, stop), daemon=True)
+    t.start()
+    t.join(timeout=8)
+    stop.set()
+    assert got  # our client received a stream from the .NET caster
