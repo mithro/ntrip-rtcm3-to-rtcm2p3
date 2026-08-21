@@ -1,0 +1,3 @@
+usr/bin/ntrip-rtcm3-to-rtcm2p3
+usr/lib/python3*/dist-packages/rtcm3to2p3
+usr/lib/python3*/dist-packages/ntrip_rtcm3_to_rtcm2p3-*.dist-info
