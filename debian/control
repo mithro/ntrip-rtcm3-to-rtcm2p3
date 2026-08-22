@@ -16,7 +16,7 @@ Package: python3-ntrip-rtcm3-to-rtcm2p3
 Architecture: all
 # python3-pyrtcm (and its dep python3-pynmeagps) are not in the main Debian
 # archive; they are published alongside this package in the same apt repo at
-# https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/ (built by
+# https://mith.ro/ntrip-rtcm3-to-rtcm2p3/ (built by
 # .github/workflows/deb.yml). Add that repo before installing.
 Depends: ${python3:Depends},
          ${misc:Depends},

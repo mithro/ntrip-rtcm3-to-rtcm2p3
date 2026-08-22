@@ -6,7 +6,7 @@ From the Debian apt repository (a flat repo published via GitHub Pages). The rep
 is served unsigned by default, so trust it explicitly:
 
 ```bash
-echo "deb [trusted=yes] https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/ ./" \
+echo "deb [trusted=yes] https://mith.ro/ntrip-rtcm3-to-rtcm2p3/ ./" \
   | sudo tee /etc/apt/sources.list.d/ntrip-rtcm3-to-rtcm2p3.list
 sudo apt-get update && sudo apt-get install ntrip-rtcm3-to-rtcm2p3
 ```

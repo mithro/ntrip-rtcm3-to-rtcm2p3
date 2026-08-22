@@ -22,7 +22,9 @@ ntrip-rtcm3-to-rtcm2p3 = "rtcm3to2p3.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/mithro/ntrip-rtcm3-to-rtcm2p3"
-Documentation = "https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/docs/"
+Documentation = "https://ntrip-rtcm3-to-rtcm2p3.readthedocs.io/"
+Repository = "https://github.com/mithro/ntrip-rtcm3-to-rtcm2p3"
+Issues = "https://github.com/mithro/ntrip-rtcm3-to-rtcm2p3/issues"
 
 [tool.hatch.version]
 source = "vcs"
