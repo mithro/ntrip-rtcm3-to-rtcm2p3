@@ -14,6 +14,8 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
+    "sphinx.ext.extlinks",
+    "sphinxcontrib.mermaid",
     "myst_parser",
 ]
 
@@ -26,7 +28,17 @@ napoleon_google_docstring = True
 
 intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}
 
-myst_enable_extensions = ["colon_fence", "deflist"]
+# `{gh}` links a repo-relative path to its source on GitHub, e.g.
+#   {gh}`scripts/validate_ublox_hardware.py`
+# -> https://github.com/mithro/ntrip-rtcm3-to-rtcm2p3/blob/main/scripts/validate_ublox_hardware.py
+extlinks = {
+    "gh": ("https://github.com/mithro/ntrip-rtcm3-to-rtcm2p3/blob/main/%s", "%s"),
+}
+extlinks_detect_hardcoded_links = True
+
+mermaid_version = "11.4.1"  # pinned; RTD renders client-side from this CDN build
+
+myst_enable_extensions = ["colon_fence", "deflist", "dollarmath", "amsmath"]
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 
 html_theme = "furo"

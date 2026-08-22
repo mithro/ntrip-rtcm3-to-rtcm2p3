@@ -15,7 +15,7 @@ dependencies = ["pyrtcm>=1.2"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
-docs = ["sphinx>=7", "myst-parser>=3", "furo>=2024.1"]
+docs = ["sphinx>=7", "myst-parser>=3", "furo>=2024.1", "sphinxcontrib-mermaid>=1.0"]
 
 [project.scripts]
 ntrip-rtcm3-to-rtcm2p3 = "rtcm3to2p3.cli:main"

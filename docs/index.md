@@ -33,6 +33,7 @@ is manual (it needs the receiver on a serial port) and is reproduced by
 
 usage
 architecture
+conversion
 validation
 api
 ```
