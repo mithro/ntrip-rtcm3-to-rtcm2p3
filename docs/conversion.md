@@ -35,16 +35,24 @@ encoder lives in {gh}`rtcm3to2p3/rtcm2.py` and {gh}`rtcm3to2p3/parity.py`.
 
 ```{mermaid}
 flowchart LR
-    A["AUSCORS RTCM3<br/>1077 obs · 1005/1006 pos"] --> P[parse]
-    E["AUSCORS RTCM3<br/>1019 ephemeris"] --> P
-    P --> R["raw pseudoranges<br/>{PRN: metres}"]
-    P --> S["station ECEF"]
-    P --> K["Keplerian ephemeris"]
-    R --> D
+    OBS["obs mount (RTCM 3)<br/>1077 MSM7 · 1005/1006 station"]
+    EPH["eph mount (RTCM 3)<br/>1019 ephemeris"]
+
+    OBS --> PR["L1 C/A pseudoranges<br/>{PRN: metres}"]
+    OBS --> S["station ECEF"]
+    EPH --> K["Keplerian ephemeris"]
+
+    K --> SAT["satellite position<br/>+ clock bias"]
+    PR --> D
     S --> D
-    K --> D["DGPS generator<br/>PRC, RRC, UDRE"]
-    D --> C["RTCM 2.3 encoder<br/>Type 1 + Type 3"]
-    C --> O["LAN NTRIP mount → u-blox 7"]
+    SAT --> D["DGPS generator<br/>PRC · RRC · UDRE · IOD"]
+
+    D --> ENC["RTCM 2.3 encoder<br/>(shared parity seed)"]
+    S --> ENC
+    ENC --> T1["Type 1<br/>corrections"]
+    ENC --> T3["Type 3<br/>base position"]
+    T1 --> O["LAN NTRIP mount<br/>→ u-blox 7"]
+    T3 --> O
 ```
 
 ---

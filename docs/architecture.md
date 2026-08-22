@@ -2,28 +2,43 @@
 
 ## Pipeline
 
-```
-  AUSCORS obs mount (RTCM3)          AUSCORS ephemeris mount (RTCM3)
-   1006 station, 1077 GPS MSM7            1019 GPS ephemeris
-             │                                    │
-   NtripClient (obs)                     NtripClient (eph)
-             │                                    │
-             ▼                                    ▼
-    ┌──────────────────────── Converter ────────────────────────┐
-    │  decode pseudoranges (rtcm3_input)   decode ephemeris      │
-    │  + station position                  → Ephemeris           │
-    │            └──────────────┬───────────────┘                │
-    │                           ▼                                │
-    │              satellite position + clock (ephemeris)        │
-    │                           ▼                                │
-    │            per-SV PRC / RRC  (dgps.DgpsGenerator)          │
-    │                           ▼                                │
-    │        encode RTCM 2.3 Type 1  (rtcm2.Rtcm2Encoder)        │
-    └───────────────────────────┬───────────────────────────────┘
-             ┌──────────────────┴──────────────────┐
-             ▼                                      ▼
-      NtripCaster mount ADDE_RTCM3          NtripCaster mount ADDE_RTCM23
-      (RTCM3 verbatim passthrough)          (generated RTCM 2.3 Type 1)
+```{mermaid}
+flowchart TB
+    subgraph UP["AUSCORS caster (upstream RTCM 3)"]
+      direction LR
+      OBS["obs mount<br/>1077 GPS MSM7 · 1005/1006 station"]
+      EPH["eph mount<br/>1019 GPS ephemeris"]
+    end
+
+    OBS --> OC["NtripClient (obs)"]
+    EPH --> EC["NtripClient (eph)"]
+
+    subgraph CONV["Converter (service.py)"]
+      direction TB
+      DEC["decode → pseudoranges + station ECEF<br/>(rtcm3_input)"]
+      EPHD["decode → Ephemeris<br/>(rtcm3_input)"]
+      SAT["satellite position + clock<br/>(ephemeris)"]
+      GEN["per-SV PRC / RRC / UDRE<br/>(dgps.DgpsGenerator)"]
+      ENC["encode RTCM 2.3 Type 1 + Type 3<br/>(rtcm2.Rtcm2Encoder)"]
+      EPHD --> SAT
+      SAT --> GEN
+      DEC --> GEN
+      GEN --> ENC
+    end
+
+    OC -->|"feed_obs (parse)"| DEC
+    EC -->|"feed_eph (parse)"| EPHD
+    OC -.->|"verbatim copy"| M3
+    ENC --> M23
+
+    subgraph CAST["NtripCaster (LAN)"]
+      direction LR
+      M3["mount ADDE_RTCM3<br/>RTCM 3 verbatim passthrough"]
+      M23["mount ADDE_RTCM23<br/>generated RTCM 2.3 Type 1 + 3"]
+    end
+
+    M3 --> LAN["LAN NTRIP clients"]
+    M23 --> UBX["u-blox 7 rover"]
 ```
 
 ## The DGPS computation
