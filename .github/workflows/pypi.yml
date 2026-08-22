@@ -1,10 +1,12 @@
 name: Publish to PyPI
 
-# Publishes on a version tag (v*), so the hatch-vcs version is a clean release
-# (e.g. v0.1.0 -> 0.1.0). Untagged commits carry a local "+g<sha>" segment that
-# PyPI rejects, so they never publish. Also runnable from a GitHub Release.
+# Publishes to PyPI on every push to main and on version tags. The hatch-vcs
+# post-release scheme produces a proper, uploadable version each time: a clean
+# release (0.1.0) on a tag, and 0.1.0.postN on the Nth commit after it — no .dev
+# and no local "+segment", so every commit is a real, PyPI-uploadable release.
 on:
   push:
+    branches: [main]
     tags:
       - "v*"
   release:
@@ -20,13 +22,13 @@ jobs:
           fetch-tags: true
       - name: Install uv
         uses: astral-sh/setup-uv@v6
-      - name: Build sdist + wheel (version from git tag via hatch-vcs)
+      - name: Build sdist + wheel (post-release version via hatch-vcs)
         run: uv build
-      - name: Refuse to publish a non-release (local +segment) version
+      - name: Sanity-check the version is PyPI-uploadable (no local +segment)
         run: |
           ls dist/
           if ls dist/*+*.whl dist/*+*.tar.gz 2>/dev/null | grep -q .; then
-            echo "::error::built a local/dev version (contains '+'); tag a release (vX.Y.Z) to publish" >&2
+            echo "::error::built version has a local '+' segment; not PyPI-uploadable" >&2
             exit 1
           fi
       - name: Validate metadata
@@ -49,3 +51,7 @@ jobs:
           path: dist/
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A workflow re-run on the same commit rebuilds the same version; don't
+          # fail because that version is already on PyPI.
+          skip-existing: true
