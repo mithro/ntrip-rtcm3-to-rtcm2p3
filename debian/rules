@@ -7,5 +7,9 @@
 # runtime deps (pyrtcm/pynmeagps) are not in the build container's archive.
 override_dh_auto_test:
 
+# Enable + start on install, and RESTART on upgrade (the default). The previous
+# --no-start left a running service stopped after every package upgrade — a real
+# outage — because nothing restarted it. restart-after-upgrade keeps a running
+# instance running (picking up the new code) across upgrades.
 override_dh_installsystemd:
-	dh_installsystemd -p ntrip-rtcm3-to-rtcm2p3 --no-start
+	dh_installsystemd -p ntrip-rtcm3-to-rtcm2p3 --restart-after-upgrade
