@@ -28,6 +28,12 @@ Issues = "https://github.com/mithro/ntrip-rtcm3-to-rtcm2p3/issues"
 
 [tool.hatch.version]
 source = "vcs"
+# Proper (non-dev) version on every commit: post-release scheme means a tag is a
+# clean release (0.1.0) and each commit after it bumps the post number
+# (0.1.0.post1, 0.1.0.post2, …) — strictly increasing, valid on PyPI, and ordering
+# correctly in Debian too. no-local-version drops the +g<sha> local segment so the
+# version stays PyPI-uploadable.
+raw-options = { version_scheme = "post-release", local_scheme = "no-local-version" }
 
 [tool.hatch.build.hooks.vcs]
 # Written at build time so the git-describe version is embedded in the package

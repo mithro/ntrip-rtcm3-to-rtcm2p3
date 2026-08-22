@@ -30,14 +30,19 @@ jobs:
           fetch-tags: true
       - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - name: Derive version from git describe
+      - name: Derive the version from git tags
         run: |
-          DESC=$(git describe --tags --always --match 'v*' --dirty)
-          # v0.1.0 -> 0.1.0 ; v0.1.0-5-gabcdef -> 0.1.0+5.gabcdef (deb-valid, sorts above 0.1.0)
-          VER=$(echo "$DESC" | sed -E 's/^v//; s/-([0-9]+)-g/+\1.g/; s/-dirty/.dirty/')
-          echo "git describe: $DESC -> deb/scm version: $VER"
+          # One source of truth, identical to pyproject's hatch-vcs raw-options:
+          # post-release scheme + no local segment. A tag is a clean release
+          # (0.1.0); each commit after it bumps the post number (0.1.0.post1,
+          # 0.1.0.post2, …). It is a PROPER version (no .dev/pre-release), strictly
+          # increasing per commit, valid for PyPI, and ordering correctly in Debian
+          # (0.1.0 < 0.1.0.postN < 0.1.1). The wheel and the .deb use the SAME value.
+          VER=$(python3 -c "from setuptools_scm import get_version; print(get_version(version_scheme='post-release', local_scheme='no-local-version'))")
+          echo "version: $VER"
           echo "PKG_VERSION=$VER" >> "$GITHUB_ENV"
-          # hatch-vcs runs inside pybuild's out-of-tree copy (no .git); pin the version.
+          # pybuild copies the tree WITHOUT .git, so pin the same value for the
+          # wheel built inside the .deb.
           echo "SETUPTOOLS_SCM_PRETEND_VERSION=$VER" >> "$GITHUB_ENV"
 
       - name: Write debian/changelog from the derived version
@@ -45,7 +50,7 @@ jobs:
           {
             echo "ntrip-rtcm3-to-rtcm2p3 ($PKG_VERSION) unstable; urgency=medium"
             echo ""
-            echo "  * Automated build from $(git describe --tags --always --match 'v*' --dirty)."
+            echo "  * Automated build of $SETUPTOOLS_SCM_PRETEND_VERSION from $(git describe --tags --always --match 'v*')."
             echo ""
             echo " -- Tim 'mithro' Ansell <me@mith.ro>  $(date -R)"
           } > debian/changelog
