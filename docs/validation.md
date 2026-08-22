@@ -8,17 +8,17 @@ self-consistency.
 
 | Stage | Independent cross-check |
 |-------|-------------------------|
-| Word parity ({gh}`rtcm3to2p3/parity.py`) | [RTKLIB](https://www.rtklib.com/) `decode_word` (Hamming-table formulation), in-test, 200 randomised words |
-| RTCM 2.3 output (Type 1 + Type 3) | [gpsd](https://gpsd.gitlab.io/gpsd/) [`gpsdecode`](https://gpsd.gitlab.io/gpsd/gpsdecode.html) (external, in CI) + an [RTKLIB](https://www.rtklib.com/)-derived decoder + a word-aligned IS-GPS-200 parity validator, all in-test |
+| Word parity ({gh}`rtcm3to2p3/parity.py`) | [RTKLIB](https://github.com/tomojitakasu/RTKLIB) `decode_word` (Hamming-table formulation), in-test, 200 randomised words |
+| RTCM 2.3 output (Type 1 + Type 3) | [gpsd](https://gpsd.gitlab.io/gpsd/) [`gpsdecode`](https://gpsd.gitlab.io/gpsd/gpsdecode.html) (external, in CI) + an [RTKLIB](https://github.com/tomojitakasu/RTKLIB)-derived decoder + a word-aligned IS-GPS-200 parity validator, all in-test |
 | RTCM 2.3 encoder | a real [u-blox 7](https://www.u-blox.com/en/product/neo-7-series) reports a DGPS fix from the output (hardware) |
 | Satellite position ({gh}`rtcm3to2p3/ephemeris.py`) | [gnss_lib_py](https://github.com/Stanford-NavLab/gnss_lib_py) `find_sv_states` (Stanford NAV Lab), agreement ~2 mm |
 | Satellite clock ({gh}`rtcm3to2p3/ephemeris.py`) | [gnss_lib_py](https://github.com/Stanford-NavLab/gnss_lib_py) `b_sv_m`, agreement to machine precision |
 | Whole conversion ({gh}`rtcm3to2p3/dgps.py`) | live [AUSCORS](https://gnss.ga.gov.au/) feed: raw corrections cluster < ~50 m |
-| NTRIP client + caster ({gh}`rtcm3to2p3/ntrip.py`) | [RTKLIB](https://www.rtklib.com/) `str2str` (in CI); [BKG `bnc`](https://igs.bkg.bund.de/ntrip/bnc) and [wangkanai/caster](https://github.com/wangkanai/caster) (.NET) optional, run when the tool is present |
+| NTRIP client + caster ({gh}`rtcm3to2p3/ntrip.py`) | [RTKLIB](https://github.com/tomojitakasu/RTKLIB) `str2str` (in CI); [BKG `bnc`](https://igs.bkg.bund.de/ntrip/bnc) and [wangkanai/caster](https://github.com/wangkanai/caster) (.NET) optional, run when the tool is present |
 
 ## Word parity
 
-{gh}`tests/test_parity.py` transcribes [RTKLIB](https://www.rtklib.com/)'s
+{gh}`tests/test_parity.py` transcribes [RTKLIB](https://github.com/tomojitakasu/RTKLIB)'s
 `decode_word` (a Hamming-table + popcount formulation, algorithmically different
 from our position-list masks) and requires our parity to agree over 200 randomised
 words including the D30\* data-inversion case. This caught an early
@@ -30,10 +30,10 @@ parity-on-inverted-data bug.
    [`gpsdecode`](https://gpsd.gitlab.io/gpsd/gpsdecode.html)** (external, separate
    codebase) decodes the encoder output and every field round-trips. Run in CI
    (`gpsd-clients` is installed there).
-2. An **[RTKLIB](https://www.rtklib.com/)-derived decoder** in
+2. An **[RTKLIB](https://github.com/tomojitakasu/RTKLIB)-derived decoder** in
    {gh}`tests/test_rtcm2.py` (6-of-8 de-framing + Hamming parity + Type 1/Type 3
    field extraction) independently recovers every field.
-3. A **word-aligned [IS-GPS-200](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf)
+3. A **word-aligned [IS-GPS-200](https://navcen.uscg.gov/sites/default/files/pdf/gps/IS-GPS-200N.pdf)
    Table 20-XIV parity validator** (`parity_violations` in
    {gh}`tests/test_rtcm2.py`) recomputes every word's six parity bits directly from
    the standard equations. Unlike a bit-by-bit resync (which can false-lock on a
@@ -53,7 +53,7 @@ non-zero station id by default.
 ## Satellite position and clock
 
 {gh}`tests/test_ephemeris.py` compares our
-[IS-GPS-200](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf) propagation to
+[IS-GPS-200](https://navcen.uscg.gov/sites/default/files/pdf/gps/IS-GPS-200N.pdf) propagation to
 [gnss_lib_py](https://github.com/Stanford-NavLab/gnss_lib_py)'s independent
 implementation: frozen reference positions agree to ~2 mm, and the clock bias
 (polynomial + relativistic + $T_{GD}$) matches gnss_lib_py's `b_sv_m` to machine
@@ -74,7 +74,7 @@ decodes its RTCM2.3 mount with [`gpsdecode`](https://gpsd.gitlab.io/gpsd/gpsdeco
 non-Python NTRIP implementations. Each is skipped unless the tool is present, so
 the default suite stays dependency-light:
 
-* **[RTKLIB](https://www.rtklib.com/) `str2str`** — pulls a mount from our caster,
+* **[RTKLIB](https://github.com/tomojitakasu/RTKLIB) `str2str`** — pulls a mount from our caster,
   and serves a mount our client pulls (both directions). Enabled by installing
   RTKLIB (in CI).
 * **[BKG NTRIP Client `bnc`](https://igs.bkg.bund.de/ntrip/bnc)** — headless

@@ -10,16 +10,16 @@ flowchart TB
       EPH["eph mount<br/>1019 GPS ephemeris"]
     end
 
-    OBS --> OC["NtripClient (obs)"]
-    EPH --> EC["NtripClient (eph)"]
+    OBS --> OC["NTRIP client (obs)"]
+    EPH --> EC["NTRIP client (eph)"]
 
-    subgraph CONV["Converter (service.py)"]
+    subgraph CONV["Converter"]
       direction TB
-      DEC["decode → pseudoranges + station ECEF<br/>(rtcm3_input)"]
-      EPHD["decode → Ephemeris<br/>(rtcm3_input)"]
-      SAT["satellite position + clock<br/>(ephemeris)"]
-      GEN["per-SV PRC / RRC / UDRE<br/>(dgps.DgpsGenerator)"]
-      ENC["encode RTCM 2.3 Type 1 + Type 3<br/>(rtcm2.Rtcm2Encoder)"]
+      DEC["decode → pseudoranges + station ECEF"]
+      EPHD["decode → Ephemeris"]
+      SAT["satellite position + clock"]
+      GEN["per-SV PRC / RRC / UDRE"]
+      ENC["encode RTCM 2.3 Type 1 + Type 3"]
       EPHD --> SAT
       SAT --> GEN
       DEC --> GEN
@@ -31,7 +31,7 @@ flowchart TB
     OC -.->|"verbatim copy"| M3
     ENC --> M23
 
-    subgraph CAST["NtripCaster (LAN)"]
+    subgraph CAST["NTRIP caster (LAN)"]
       direction LR
       M3["mount ADDE_RTCM3<br/>RTCM 3 verbatim passthrough"]
       M23["mount ADDE_RTCM23<br/>generated RTCM 2.3 Type 1 + 3"]
@@ -40,6 +40,15 @@ flowchart TB
     M3 --> LAN["LAN NTRIP clients"]
     M23 --> UBX["u-blox 7 rover"]
 ```
+
+Each box maps to a module (links go to the source on GitHub):
+
+* **NTRIP client / caster** — {gh}`rtcm3to2p3/ntrip.py` (`NtripClient`, `NtripCaster`, `Feed`)
+* **Converter orchestration** (`feed_obs` / `feed_eph`) — {gh}`rtcm3to2p3/service.py` (`Converter`)
+* **RTCM 3 decode** (pseudoranges, station, ephemeris) — {gh}`rtcm3to2p3/rtcm3_input.py`
+* **Satellite position + clock** — {gh}`rtcm3to2p3/ephemeris.py`
+* **Per-SV PRC / RRC / UDRE** — {gh}`rtcm3to2p3/dgps.py` (`DgpsGenerator`)
+* **RTCM 2.3 encode + parity** — {gh}`rtcm3to2p3/rtcm2.py` (`Rtcm2Encoder`) and {gh}`rtcm3to2p3/parity.py`
 
 ## The DGPS computation
 
@@ -55,7 +64,7 @@ raw_i = geometric_range(station, satellite_i) - pseudorange_i - c · dt_sv_i
 ```
 
 * **Geometric range** uses the satellite position from broadcast ephemeris
-  ([IS-GPS-200](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf),
+  ([IS-GPS-200](https://navcen.uscg.gov/sites/default/files/pdf/gps/IS-GPS-200N.pdf),
   {gh}`rtcm3to2p3/ephemeris.py`) at the signal transmit time, with the Sagnac
   (Earth-rotation) correction.
 * **`dt_sv`** is the satellite clock offset (af0/af1/af2 + relativistic term +
@@ -76,7 +85,7 @@ RTCM SC-104 v2.3 is a legacy bit-packed format ({gh}`rtcm3to2p3/rtcm2.py`):
 
 * Messages are a continuous stream of **30-bit words** (24 data + 6 parity), with
   the D29\*/D30\* parity seed chaining across every word and every message.
-* Parity follows [IS-GPS-200](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf)
+* Parity follows [IS-GPS-200](https://navcen.uscg.gov/sites/default/files/pdf/gps/IS-GPS-200N.pdf)
   Table 20-XIV ({gh}`rtcm3to2p3/parity.py`); on D30\* the *transmitted* data bits
   are inverted while parity is computed on the source.
 * Each 30-bit word is sent as five 6-bit groups, MSB first, each a byte

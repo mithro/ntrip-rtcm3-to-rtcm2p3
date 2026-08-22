@@ -1,9 +1,10 @@
 # ntrip-rtcm3-to-rtcm2p3
 
-An NTRIP **receiver + LAN rebroadcaster** that also **converts** an RTCM 3.x
-reference stream into **RTCM 2.3** DGPS corrections, so that legacy single-band
-receivers that only understand RTCM 2.3 (e.g. u-blox 7) can benefit from a modern
-RTCM3-only correction network.
+An [NTRIP](https://software.rtcm-ntrip.org/) **receiver + LAN rebroadcaster** that
+also **converts** an [RTCM](https://www.rtcm.org/publications) 3.x reference stream
+into **RTCM 2.3** DGPS corrections, so that legacy single-band receivers that only
+understand RTCM 2.3 (e.g. the [u-blox 7](https://www.u-blox.com/en/product/neo-7-series))
+can benefit from a modern RTCM3-only correction network.
 
 > Built incrementally with a full test suite; every conversion stage is
 > cross-checked against independent implementations (see the Validation docs).
@@ -12,10 +13,13 @@ RTCM3-only correction network.
 
 ## Why
 
-Modern correction networks (e.g. Geoscience Australia's AUSCORS) broadcast
-**RTCM 3.x** only. A u-blox 7 / NEO-7 accepts **RTCM 2.3** DGPS corrections but has
-no RTCM3 decoder. No off-the-shelf tool converts RTCM3 → RTCM 2.3 (`str2str` can
-only *emit* RTCM3; BNC only *decodes* RTCM2). RTCM 2.3 Type 1 messages are
+Modern correction networks (e.g. Geoscience Australia's
+[AUSCORS](https://gnss.ga.gov.au/)) broadcast **RTCM 3.x** only. A u-blox 7 / NEO-7
+accepts **RTCM 2.3** DGPS corrections but has no RTCM3 decoder. No off-the-shelf
+tool converts RTCM3 → RTCM 2.3 ([RTKLIB](https://github.com/tomojitakasu/RTKLIB)'s
+`str2str` can only *emit* RTCM3; the
+[BKG NTRIP Client (BNC)](https://igs.bkg.bund.de/ntrip/bnc) only *decodes* RTCM2).
+RTCM 2.3 Type 1 messages are
 *derived* pseudorange corrections, not a reformat — they must be computed from the
 base station's observations, its known position, and satellite positions from
 broadcast ephemeris.

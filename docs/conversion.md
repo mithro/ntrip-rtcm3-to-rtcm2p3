@@ -2,8 +2,9 @@
 
 This page is a complete walkthrough of how this project turns an RTCM 3.x
 reference-station stream into RTCM 2.3 Type 1 pseudorange corrections (and Type 3
-station coordinates) that a legacy single-frequency receiver such as a u-blox 7
-can use for a **DGPS** (Differential GPS) position fix. It is split into a
+station coordinates) that a legacy single-frequency receiver such as a
+[u-blox 7](https://www.u-blox.com/en/product/neo-7-series) can use for a **DGPS**
+(Differential GPS) position fix. It is split into a
 **theoretical** part (the geodesy and the equations) and a **practical** part
 (the numerical types and the order of operations that keep the result accurate to
 the few-millimetre level set by the RTCM quantisation step — §2.8 — and free of
@@ -16,11 +17,11 @@ GitHub.
 ## Why a conversion is even needed
 
 Modern correction networks — e.g. Geoscience Australia's
-[AUSCORS](https://www.ga.gov.au/scientific-topics/positioning-navigation/geodesy/auscors)
+[AUSCORS](https://gnss.ga.gov.au/)
 — broadcast **RTCM 3.x** only. A u-blox 7 (and other legacy single-band
 receivers) accepts **RTCM 2.3** Type 1 DGPS corrections but has no RTCM 3 decoder.
 No off-the-shelf tool converts between them: RTKLIB's
-[`str2str`](https://www.rtklib.com/) only *relays/encodes* RTCM 3, and
+[`str2str`](https://github.com/tomojitakasu/RTKLIB) only *relays/encodes* RTCM 3, and
 [BNC](https://igs.bkg.bund.de/ntrip/bnc) only *decodes* RTCM 2. The reason is
 that an RTCM 2.3 Type 1 message is not a re-packaging of RTCM 3 fields — it is a
 **derived** quantity that must be *computed* from three separate inputs:
@@ -57,7 +58,7 @@ flowchart LR
     T3 --> O
 ```
 
-*The stream is carried over [NTRIP](https://igs.org/wg/ntrip/), the standard
+*The stream is carried over [NTRIP](https://software.rtcm-ntrip.org/), the standard
 HTTP-based transport for RTCM. The acronyms in the diagram (PRC, RRC, UDRE, IOD,
 ECEF, PRN) are all defined in Part 1 below.*
 
@@ -103,7 +104,7 @@ The geometric range needs the satellite's position at the instant it *transmitte
 the signal the base received. The broadcast ephemeris (RTCM 3 message 1019,
 decoded to {gh}`rtcm3to2p3/ephemeris.py` `Ephemeris`) is a set of quasi-Keplerian
 orbital elements; the position algorithm is the "user algorithm for ephemeris
-determination" in [IS-GPS-200](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf)
+determination" in [IS-GPS-200](https://navcen.uscg.gov/sites/default/files/pdf/gps/IS-GPS-200N.pdf)
 §20.3.3.4.3.1 (Table 20-IV), reproduced here as implemented in
 {gh}`rtcm3to2p3/ephemeris.py` (`satellite_position`). It is cross-checked in the
 test suite against [gnss_lib_py](https://github.com/Stanford-NavLab/gnss_lib_py)'s
@@ -113,7 +114,7 @@ With the IS-GPS-200 value $\mu = 3.986005\times10^{14}\ \mathrm{m^3/s^2}$ (the G
 constant *mandated* for the GPS ephemeris user algorithm — subtly different from
 the modern WGS-84 GM, and using the WGS-84 value here would be an error) and the
 WGS-84 Earth-rotation rate $\dot\Omega_e = 7.2921151467\times10^{-5}\ \mathrm{rad/s}$
-([IS-GPS-200](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf) Table 20-IV),
+([IS-GPS-200](https://navcen.uscg.gov/sites/default/files/pdf/gps/IS-GPS-200N.pdf) Table 20-IV),
 each line below feeds the next:
 
 $$
@@ -160,7 +161,7 @@ for a step-by-step derivation of the same algorithm.
 The satellite clock offset removes the $\delta t^{(i)}_{\text{sv}}$ term. It is a
 quadratic polynomial about the clock reference time $t_{oc}$ plus a relativistic
 eccentricity term and, for a single-frequency L1 user, the group delay $T_{GD}$
-([IS-GPS-200](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf) §20.3.3.3.3.1;
+([IS-GPS-200](https://navcen.uscg.gov/sites/default/files/pdf/gps/IS-GPS-200N.pdf) §20.3.3.3.3.1;
 [ESA Navipedia, *Relativistic Clock
 Correction*](https://gssc.esa.int/navipedia/index.php/Relativistic_Clock_Correction)):
 
@@ -175,7 +176,7 @@ precision against gnss_lib_py's `b_sv_m` (which likewise applies $T_{GD}$) — s
 {doc}`validation`. Applying $T_{GD}$ is correct precisely because the target
 rover is a single-frequency receiver using **L1 C/A** — the civilian
 coarse/acquisition code on the GPS L1 carrier
-([IS-GPS-200](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf) §20.3.3.3.3.2).
+([IS-GPS-200](https://navcen.uscg.gov/sites/default/files/pdf/gps/IS-GPS-200N.pdf) §20.3.3.3.3.2).
 
 ### 1.4 Geometric range and the Sagnac correction
 
@@ -278,7 +279,7 @@ decoder (see {doc}`validation`):
   antenna reference point.
 
 Every 30-bit word carries 24 data bits + 6 parity bits computed with the GPS
-parity algorithm ([IS-GPS-200](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf)
+parity algorithm ([IS-GPS-200](https://navcen.uscg.gov/sites/default/files/pdf/gps/IS-GPS-200N.pdf)
 Table 20-XIV). Each word's parity depends on the last two bits of the *previous*
 word (the D29\*/D30\* "seed"), and that seed is carried across word *and message*
 boundaries; the 30-bit words are then packed into bytes with RTCM's "6-of-8"
@@ -327,7 +328,7 @@ subtracts directly rather than trying to pre-remove a nominal range.
 Times of week wrap every 604 800 s. Any $t - t_{\text{ref}}$ (for $t_{oe}$,
 $t_{oc}$, or the previous epoch) is reduced into $[-302400, +302400]\ \mathrm{s}$
 by `_delta_t_week` in {gh}`rtcm3to2p3/ephemeris.py`, per
-[IS-GPS-200](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf) §20.3.3.4.3.1.
+[IS-GPS-200](https://navcen.uscg.gov/sites/default/files/pdf/gps/IS-GPS-200N.pdf) §20.3.3.4.3.1.
 Doing the subtraction first and *then* the wrap keeps $t_k$ small (seconds to
 hours), so $n\,t_k$ and the harmonic arguments never lose precision to a huge
 operand.
@@ -398,7 +399,7 @@ computation, the D29\*/D30\* seed chaining and the 6-of-8 framing are all done o
 Python arbitrary-precision **integers** ({gh}`rtcm3to2p3/bits.py`,
 {gh}`rtcm3to2p3/parity.py`), so there is no floating-point involved and the wire
 output is bit-exact. The parity masks are transcribed from
-[IS-GPS-200](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf) Table 20-XIV and
+[IS-GPS-200](https://navcen.uscg.gov/sites/default/files/pdf/gps/IS-GPS-200N.pdf) Table 20-XIV and
 independently checked against RTKLIB's Hamming-table formulation over randomised
 words (see {doc}`validation`).
 
@@ -422,14 +423,14 @@ each check.
 
 ## Primary references
 
-* [IS-GPS-200 — NAVSTAR GPS Space Segment / Navigation User Interfaces](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf)
+* [IS-GPS-200 — NAVSTAR GPS Space Segment / Navigation User Interfaces](https://navcen.uscg.gov/sites/default/files/pdf/gps/IS-GPS-200N.pdf)
   (satellite position §20.3.3.4.3, clock §20.3.3.3.3, parity Table 20-XIV).
 * [RTCM Standards (SC-104)](https://www.rtcm.org/publications) — 10402.3 (RTCM 2.3)
   and 10403.x (RTCM 3.x).
 * [ESA Navipedia — GNSS theory](https://gssc.esa.int/navipedia/index.php/Main_Page)
   (satellite coordinates, emission time, relativistic clock, Sagnac effect).
-* [RTKLIB](https://www.rtklib.com/) — reference C implementation
-  ([source](https://github.com/tomojitakasu/RTKLIB)).
+* [RTKLIB](https://github.com/tomojitakasu/RTKLIB) — reference C implementation
+  of the GNSS algorithms.
 * [gnss_lib_py (Stanford NAV Lab)](https://github.com/Stanford-NavLab/gnss_lib_py)
   — independent satellite position/clock used as the numerical reference.
 * [gpsd / gpsdecode](https://gpsd.gitlab.io/gpsd/) — independent RTCM 2 decoder.

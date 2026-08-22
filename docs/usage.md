@@ -63,7 +63,8 @@ Run `ntrip-rtcm3-to-rtcm2p3 --help` for the full list. Key options:
 `--station-id`
 : The RTCM 2.3 reference-station id to emit (1..1023). It is an identifier only;
   the default (1023) is used rather than the upstream base's id because some
-  casters send 0, and station id 0/2 trips gpsd's cold-sync.
+  casters send 0, and station id 0/2 trips [gpsd](https://gpsd.gitlab.io/gpsd/)'s
+  cold-sync.
 
 `--upstream-tls`
 : Connect to the upstream caster over TLS (port 443) instead of plain 2101.
