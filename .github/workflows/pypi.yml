@@ -1,0 +1,51 @@
+name: Publish to PyPI
+
+# Publishes on a version tag (v*), so the hatch-vcs version is a clean release
+# (e.g. v0.1.0 -> 0.1.0). Untagged commits carry a local "+g<sha>" segment that
+# PyPI rejects, so they never publish. Also runnable from a GitHub Release.
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # full history + tags so hatch-vcs derives the version
+          fetch-tags: true
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+      - name: Build sdist + wheel (version from git tag via hatch-vcs)
+        run: uv build
+      - name: Refuse to publish a non-release (local +segment) version
+        run: |
+          ls dist/
+          if ls dist/*+*.whl dist/*+*.tar.gz 2>/dev/null | grep -q .; then
+            echo "::error::built a local/dev version (contains '+'); tag a release (vX.Y.Z) to publish" >&2
+            exit 1
+          fi
+      - name: Validate metadata
+        run: uvx twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi          # matches the PyPI Trusted Publisher configuration
+    permissions:
+      id-token: write          # OIDC token for PyPI trusted publishing (no API token)
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
