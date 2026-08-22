@@ -34,6 +34,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="ntrip-rtcm3-to-rtcm2p3",
         description="NTRIP rebroadcaster that also converts RTCM3 to RTCM 2.3 DGPS corrections.",
     )
+    from . import __version__
+    p.add_argument("--version", action="version",
+                   version=f"%(prog)s {__version__}")
     d = Config()
     p.add_argument("--upstream-host", default=d.upstream_host)
     p.add_argument("--upstream-port", type=int, default=d.upstream_port)

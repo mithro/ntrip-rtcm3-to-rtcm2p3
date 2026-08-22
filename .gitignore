@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+# hatch-vcs writes this at build time from the git tag
+rtcm3to2p3/_version.py
 build/
 dist/
 .venv/

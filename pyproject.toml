@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "ntrip-rtcm3-to-rtcm2p3"
-version = "0.1.0"
+dynamic = ["version"]
 description = "NTRIP receiver + LAN rebroadcaster that converts an RTCM 3.x reference stream into RTCM 2.3 DGPS corrections for legacy receivers"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -24,8 +24,21 @@ ntrip-rtcm3-to-rtcm2p3 = "rtcm3to2p3.cli:main"
 Homepage = "https://github.com/mithro/ntrip-rtcm3-to-rtcm2p3"
 Documentation = "https://mithro.github.io/ntrip-rtcm3-to-rtcm2p3/docs/"
 
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+# Written at build time so the git-describe version is embedded in the package
+# (importable even when installed from a tarball with no .git present).
+version-file = "rtcm3to2p3/_version.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["rtcm3to2p3"]
+
+[tool.hatch.build.targets.sdist]
+# Include the VCS metadata resolution so `pip install` from a git checkout or an
+# sdist carries the derived version.
+include = ["rtcm3to2p3", "README.md", "LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
