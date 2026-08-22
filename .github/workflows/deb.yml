@@ -16,6 +16,10 @@ jobs:
             build-essential ca-certificates git \
             dpkg-dev debhelper dh-python pybuild-plugin-pyproject \
             python3-all python3-hatchling python3-stdeb python3-pip
+          # pybuild uses the system hatchling; give it the hatch-vcs plugin so the
+          # pyproject `source = "vcs"` resolves (SETUPTOOLS_SCM_PRETEND_VERSION,
+          # set below, supplies the value since pybuild copies the tree without .git).
+          pip install --break-system-packages hatch-vcs
 
       - uses: actions/checkout@v4
         with:
