@@ -28,6 +28,9 @@
 
 ## The DGPS computation
 
+For the full theoretical and numerical-accuracy walkthrough of every step below,
+see {doc}`conversion`.
+
 For each GPS satellite the reference station computes the difference between the
 geometric range (from its known position to the satellite) and the measured
 pseudorange, with the satellite clock removed:
@@ -37,8 +40,9 @@ raw_i = geometric_range(station, satellite_i) - pseudorange_i - c · dt_sv_i
 ```
 
 * **Geometric range** uses the satellite position from broadcast ephemeris
-  (IS-GPS-200, {mod}`rtcm3to2p3.ephemeris`) at the signal transmit time, with the
-  Sagnac (Earth-rotation) correction.
+  ([IS-GPS-200](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf),
+  {gh}`rtcm3to2p3/ephemeris.py`) at the signal transmit time, with the Sagnac
+  (Earth-rotation) correction.
 * **`dt_sv`** is the satellite clock offset (af0/af1/af2 + relativistic term +
   L1 group delay).
 
@@ -53,12 +57,13 @@ between epochs, with the common base-clock drift removed the same way.
 
 ## The RTCM 2.3 wire encoding
 
-RTCM SC-104 v2.3 is a legacy bit-packed format ({mod}`rtcm3to2p3.rtcm2`):
+RTCM SC-104 v2.3 is a legacy bit-packed format ({gh}`rtcm3to2p3/rtcm2.py`):
 
 * Messages are a continuous stream of **30-bit words** (24 data + 6 parity), with
   the D29\*/D30\* parity seed chaining across every word and every message.
-* Parity follows IS-GPS-200 Table 20-XIV ({mod}`rtcm3to2p3.parity`); on D30\* the
-  *transmitted* data bits are inverted while parity is computed on the source.
+* Parity follows [IS-GPS-200](https://www.gps.gov/technical/icwg/IS-GPS-200N.pdf)
+  Table 20-XIV ({gh}`rtcm3to2p3/parity.py`); on D30\* the *transmitted* data bits
+  are inverted while parity is computed on the source.
 * Each 30-bit word is sent as five 6-bit groups, MSB first, each a byte
   `0x40 | reverse6(group)` (the "6-of-8" framing).
 

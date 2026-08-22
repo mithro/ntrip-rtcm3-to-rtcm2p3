@@ -11,8 +11,10 @@ echo "deb [trusted=yes] https://mith.ro/ntrip-rtcm3-to-rtcm2p3/ ./" \
 sudo apt-get update && sudo apt-get install ntrip-rtcm3-to-rtcm2p3
 ```
 
-The repo also carries `python3-pyrtcm` and `python3-pynmeagps` (not yet in the
-main Debian archive), so `apt` resolves all dependencies from this one source.
+The repo also carries `python3-pyrtcm` ([pyrtcm](https://pypi.org/project/pyrtcm/))
+and `python3-pynmeagps` ([pynmeagps](https://pypi.org/project/pynmeagps/)) — not
+yet in the main Debian archive — so `apt` resolves all dependencies from this one
+source.
 
 :::{note}
 GPG signing is optional and off until the maintainer sets the
@@ -70,10 +72,12 @@ Run `ntrip-rtcm3-to-rtcm2p3 --help` for the full list. Key options:
 
 A `systemd` unit runs it as a dedicated user, reading the password from a
 root-only file and binding the LAN interfaces. See the packaged
-`ntrip-rtcm3-to-rtcm2p3.service`.
+{gh}`debian/ntrip-rtcm3-to-rtcm2p3.service`.
 
 ## Which receivers benefit
 
-The u-blox 7 (and other RTCM-2.3-only receivers) apply the Type 1 corrections for
-a **DGPS** (sub-metre-class) solution. Modern RTK receivers (u-blox F9P, …) should
-consume the **RTCM3** passthrough mount directly instead.
+The [u-blox 7](https://www.u-blox.com/en/product/neo-7-series) (and other
+RTCM-2.3-only receivers) apply the Type 1 corrections for a **DGPS**
+(sub-metre-class) solution. Modern RTK receivers
+([u-blox F9P](https://www.u-blox.com/en/product/zed-f9p-module), …) should consume
+the **RTCM3** passthrough mount directly instead.
