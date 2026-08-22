@@ -19,7 +19,10 @@ jobs:
           # pybuild uses the system hatchling; give it the hatch-vcs plugin so the
           # pyproject `source = "vcs"` resolves (SETUPTOOLS_SCM_PRETEND_VERSION,
           # set below, supplies the value since pybuild copies the tree without .git).
-          pip install --break-system-packages hatch-vcs
+          # --no-deps: hatchling/packaging/setuptools are already present as apt
+          # packages; a full resolve would try (and fail) to replace apt's packaging.
+          pip install --break-system-packages --no-deps \
+            hatch-vcs setuptools-scm vcs-versioning
 
       - uses: actions/checkout@v4
         with:
