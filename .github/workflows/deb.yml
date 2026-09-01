@@ -3,11 +3,21 @@ name: Debian Packages
 on:
   push:
     branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build-deb:
     runs-on: ubuntu-latest
-    container: debian:trixie
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [trixie, sid]
+    container: debian:${{ matrix.suite }}
     steps:
       - name: Install build dependencies
         run: |
@@ -84,97 +94,21 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: debs
+          name: debs-${{ matrix.suite }}
           path: built-debs/
 
   publish-apt:
+    # Build on PRs to validate, but never publish from one: that would
+    # overwrite the live repository with unreviewed packages.
+    if: github.event_name != 'pull_request'
     needs: build-deb
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: debs
-          path: apt-repo/
-
-      - name: Generate apt repo metadata
-        run: |
-          sudo apt-get update && sudo apt-get install -y apt-utils
-          cd apt-repo
-          dpkg-scanpackages --multiversion . > Packages
-          gzip -k Packages
-          cat > Release <<EOF
-          Origin: ntrip-rtcm3-to-rtcm2p3
-          Label: ntrip-rtcm3-to-rtcm2p3
-          Suite: stable
-          Codename: trixie
-          Architectures: all
-          Components: main
-          Description: ntrip-rtcm3-to-rtcm2p3 apt repository
-          EOF
-          sed -i 's/^          //' Release
-          apt-ftparchive release . >> Release
-
-      - name: Sign repo (only if a signing key secret is configured)
-        id: sign
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
-        run: |
-          if [ -z "$GPG_PRIVATE_KEY" ]; then
-            echo "APT_GPG_PRIVATE_KEY not set -> publishing an UNSIGNED repo" \
-                 "(install with [trusted=yes]). Add the secret to enable signing." >&2
-            echo "signed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-          cd apt-repo
-          gpg --batch --yes --armor --detach-sign --output Release.gpg Release
-          gpg --batch --yes --armor --clearsign --output InRelease Release
-          gpg --batch --yes --armor --export > ntrip-rtcm3-to-rtcm2p3.gpg
-          echo "signed=true" >> "$GITHUB_OUTPUT"
-
-      - name: Create index page
-        env:
-          SIGNED: ${{ steps.sign.outputs.signed }}
-        run: |
-          base=https://mith.ro/ntrip-rtcm3-to-rtcm2p3
-          if [ "$SIGNED" = "true" ]; then
-            setup=$(cat <<EOF
-          # Verified install (repo is GPG-signed):
-          curl -fsSL $base/ntrip-rtcm3-to-rtcm2p3.gpg \\
-            | sudo tee /etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg > /dev/null
-          echo "deb [signed-by=/etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg] $base/ ./" \\
-            | sudo tee /etc/apt/sources.list.d/ntrip-rtcm3-to-rtcm2p3.list
-          sudo apt update && sudo apt install ntrip-rtcm3-to-rtcm2p3
-          EOF
-          )
-          else
-            setup=$(cat <<EOF
-          # This repository is currently UNSIGNED; trust it explicitly:
-          echo "deb [trusted=yes] $base/ ./" \\
-            | sudo tee /etc/apt/sources.list.d/ntrip-rtcm3-to-rtcm2p3.list
-          sudo apt update && sudo apt install ntrip-rtcm3-to-rtcm2p3
-          EOF
-          )
-          fi
-          {
-            echo '<!DOCTYPE html><html>'
-            echo '<head><title>ntrip-rtcm3-to-rtcm2p3 apt repository</title></head>'
-            echo '<body><h1>ntrip-rtcm3-to-rtcm2p3</h1>'
-            echo '<p>📖 Documentation: <a href="https://ntrip-rtcm3-to-rtcm2p3.readthedocs.io/">ntrip-rtcm3-to-rtcm2p3.readthedocs.io</a></p>'
-            echo '<h2>apt repository</h2><pre>'
-            printf '%s\n' "$setup"
-            echo '</pre></body></html>'
-          } > apt-repo/index.html
-
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: apt-repo/
-      - id: deploy
-        uses: actions/deploy-pages@v4
+    uses: mithro/apt-repo-action/.github/workflows/publish-apt.yml@main
+    with:
+      suites: "trixie sid"
+      # Architecture: all -- one deb serves every architecture.
+      architectures: "all"
+      origin: ntrip-rtcm3-to-rtcm2p3
+      description: "NTRIP caster converting RTCM3 to RTCM2.3"
+      keyring-name: ntrip-rtcm3-to-rtcm2p3.gpg
+    secrets:
+      gpg-private-key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
