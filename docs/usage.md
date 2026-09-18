@@ -2,8 +2,7 @@
 
 ## Install
 
-From the Debian apt repository published via GitHub Pages. It is signed, and
-each suite (`trixie/`, `sid/`) is its own flat repository:
+From the Debian apt repository published via GitHub Pages:
 
 ```bash
 sudo install -d -m0755 /etc/apt/keyrings
@@ -14,18 +13,12 @@ echo "deb [signed-by=/etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg] https://mith.
 sudo apt-get update && sudo apt-get install ntrip-rtcm3-to-rtcm2p3
 ```
 
+On sid, use `https://mith.ro/ntrip-rtcm3-to-rtcm2p3/sid/` instead.
+
 The repo also carries `python3-pyrtcm` ([pyrtcm](https://pypi.org/project/pyrtcm/))
 and `python3-pynmeagps` ([pynmeagps](https://pypi.org/project/pynmeagps/)) — not
 yet in the main Debian archive — so `apt` resolves all dependencies from this one
 source.
-
-:::{note}
-The source line must name a suite and keep the trailing `./`: the repository
-root carries no `Packages` file, so pointing at it fails `apt-get update` with
-a 404. On sid, swap `trixie/` for `sid/`; the two carry identical contents
-(every package is `Architecture: all`). The published index page at
-<https://mith.ro/ntrip-rtcm3-to-rtcm2p3/> shows both.
-:::
 
 Or with `pip`/`uv` from source:
 
