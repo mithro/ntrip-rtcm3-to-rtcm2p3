@@ -2,27 +2,23 @@
 
 ## Install
 
-From the Debian apt repository (a flat repo published via GitHub Pages). The repo
-is served unsigned by default, so trust it explicitly:
+From the Debian apt repository published via GitHub Pages:
 
 ```bash
-echo "deb [trusted=yes] https://mith.ro/ntrip-rtcm3-to-rtcm2p3/ ./" \
+sudo install -d -m0755 /etc/apt/keyrings
+curl -fsSL https://mith.ro/ntrip-rtcm3-to-rtcm2p3/ntrip-rtcm3-to-rtcm2p3.gpg \
+  | sudo tee /etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg > /dev/null
+echo "deb [signed-by=/etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg] https://mith.ro/ntrip-rtcm3-to-rtcm2p3/trixie/ ./" \
   | sudo tee /etc/apt/sources.list.d/ntrip-rtcm3-to-rtcm2p3.list
 sudo apt-get update && sudo apt-get install ntrip-rtcm3-to-rtcm2p3
 ```
+
+On sid, use `https://mith.ro/ntrip-rtcm3-to-rtcm2p3/sid/` instead.
 
 The repo also carries `python3-pyrtcm` ([pyrtcm](https://pypi.org/project/pyrtcm/))
 and `python3-pynmeagps` ([pynmeagps](https://pypi.org/project/pynmeagps/)) — not
 yet in the main Debian archive — so `apt` resolves all dependencies from this one
 source.
-
-:::{note}
-GPG signing is optional and off until the maintainer sets the
-`APT_GPG_PRIVATE_KEY` repository secret. Once enabled, the published index page
-switches to a verified `signed-by=` install that fetches
-`…/ntrip-rtcm3-to-rtcm2p3.gpg`; until then that key is not published and
-`[trusted=yes]` is the working install.
-:::
 
 Or with `pip`/`uv` from source:
 
