@@ -116,8 +116,6 @@ jobs:
       suites: "trixie sid"
       # Architecture: all -- one deb serves every architecture.
       architectures: "all"
-      origin: ntrip-rtcm3-to-rtcm2p3
       description: "NTRIP caster converting RTCM3 to RTCM2.3"
-      keyring-name: ntrip-rtcm3-to-rtcm2p3.gpg
     secrets:
       gpg-private-key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
