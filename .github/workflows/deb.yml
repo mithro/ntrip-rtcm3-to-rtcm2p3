@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [trixie, sid]
+        suite: [trixie, forky, sid]
     runs-on: ubuntu-24.04
     container: debian:${{ matrix.suite }}
     env:
@@ -84,7 +84,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [trixie, sid]
+        suite: [trixie, forky, sid]
         # Architecture: all (pure Python): one build per suite serves every
         # architecture.
         arch: [all]
@@ -159,7 +159,7 @@ jobs:
     needs: build-deb
     uses: mithro/apt-repo-action/.github/workflows/publish-apt.yml@main
     with:
-      suites: "trixie sid"
+      suites: "trixie forky sid"
       # Architecture: all -- one deb serves every architecture.
       architectures: "all"
       description: "NTRIP caster converting RTCM3 to RTCM2.3"
