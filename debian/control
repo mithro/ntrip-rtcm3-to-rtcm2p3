@@ -1,11 +1,15 @@
 Source: ntrip-rtcm3-to-rtcm2p3
 Section: python
 Priority: optional
-Maintainer: Tim Ansell <tim@mithis.com>
+Maintainer: Tim 'mithro' Ansell <me@mith.ro>
+# hatch-vcs derives the Python package's version from git (pyproject.toml),
+# so the build also needs git and the checkout's history.
 Build-Depends: debhelper-compat (= 13),
                dh-python,
+               git,
                pybuild-plugin-pyproject,
                python3-all,
+               python3-hatch-vcs,
                python3-hatchling,
 Standards-Version: 4.7.0
 Homepage: https://github.com/mithro/ntrip-rtcm3-to-rtcm2p3

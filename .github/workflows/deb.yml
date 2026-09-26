@@ -1,103 +1,148 @@
-name: Debian Packages
+name: Debian packages
 
+# Rolling release: every push to main tests, builds the packages for each
+# suite, and republishes a signed apt repository per suite on GitHub Pages
+# (https://mith.ro/ntrip-rtcm3-to-rtcm2p3/<suite>/). A pull request runs the
+# same tests and builds, and publishes nothing.
+#
+# This follows mithro/apt-repo-action's docs/packaging.md; how this
+# repository is packaged is declared in .github/apt-packaging.toml.
 on:
   push:
     branches: [main]
-  workflow_dispatch:
   pull_request:
+  workflow_dispatch:
 
 # Least privilege by default: only the publish job below raises this, and only
-# for itself. The build jobs run Docker and clone third-party sources, so they
+# for itself. The build jobs run Docker and fetch third-party sources, so they
 # should never hold a token that can write to Pages.
 permissions:
   contents: read
 
+concurrency:
+  group: deb-${{ github.ref }}
+  # A newer push to a pull request cancels the older build. On the default
+  # branch a running publish is never cancelled: the newest push waits for it,
+  # and replaces any older push still waiting (it contains that one's commits).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  build-deb:
-    runs-on: ubuntu-latest
+  # The project's own tests, formerly the "CI" workflow (ci.yml), run with
+  # each suite's own Python, as the packages will be.
+  test:
     strategy:
       fail-fast: false
       matrix:
-        suite: [trixie, sid]
+        suite: [trixie, forky, sid]
+    runs-on: ubuntu-24.04
     container: debian:${{ matrix.suite }}
+    env:
+      # The suite's python3, never a uv-managed download.
+      UV_PYTHON_PREFERENCE: only-system
     steps:
-      - name: Install build dependencies
+      # Before the checkout: without git in the container, actions/checkout
+      # downloads a tarball instead of cloning, and hatch-vcs has no history
+      # to derive the version from.
+      - name: Install test dependencies
         run: |
           apt-get update
+          # gpsd-clients and rtklib: gpsdecode and str2str, the independent
+          # implementations the tests cross-check against.
           apt-get install -y --no-install-recommends \
-            build-essential ca-certificates git \
-            dpkg-dev debhelper dh-python pybuild-plugin-pyproject \
-            python3-all python3-hatchling python3-stdeb python3-pip
-          # pybuild uses the system hatchling; give it the hatch-vcs plugin so the
-          # pyproject `source = "vcs"` resolves (SETUPTOOLS_SCM_PRETEND_VERSION,
-          # set below, supplies the value since pybuild copies the tree without .git).
-          # --no-deps: hatchling/packaging/setuptools are already present as apt
-          # packages; a full resolve would try (and fail) to replace apt's packaging.
-          pip install --break-system-packages --no-deps \
-            hatch-vcs setuptools-scm vcs-versioning
-
-      - uses: actions/checkout@v4
+            ca-certificates git gpsd-clients python3 rtklib
+      - uses: actions/checkout@v5
         with:
-          fetch-depth: 0
-          fetch-tags: true
+          fetch-depth: 0       # full history + tags so hatch-vcs can derive the version
+      # The workspace belongs to the runner's user, not the container's root,
+      # and git won't read a tree owned by someone else.
       - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-
-      - name: Derive the version from git tags
+      # The build generates debian/changelog: apt-repo-action's shared
+      # scripts/deb-version.py writes the build's entry, with the version
+      # derived from git. Committing a build's output would pin a stale
+      # version (and name a commit that may not exist), so it must not be
+      # tracked.
+      - name: debian/changelog is not committed
         run: |
-          # One source of truth, identical to pyproject's hatch-vcs raw-options:
-          # post-release scheme + no local segment. A tag is a clean release
-          # (0.1.0); each commit after it bumps the post number (0.1.0.post1,
-          # 0.1.0.post2, …). It is a PROPER version (no .dev/pre-release), strictly
-          # increasing per commit, valid for PyPI, and ordering correctly in Debian
-          # (0.1.0 < 0.1.0.postN < 0.1.1). The wheel and the .deb use the SAME value.
-          VER=$(python3 -c "from setuptools_scm import get_version; print(get_version(version_scheme='post-release', local_scheme='no-local-version'))")
-          echo "version: $VER"
-          echo "PKG_VERSION=$VER" >> "$GITHUB_ENV"
-          # pybuild copies the tree WITHOUT .git, so pin the same value for the
-          # wheel built inside the .deb.
-          echo "SETUPTOOLS_SCM_PRETEND_VERSION=$VER" >> "$GITHUB_ENV"
+          git rev-parse --is-inside-work-tree
+          if git ls-files --error-unmatch debian/changelog; then
+            echo "::error file=debian/changelog::debian/changelog is committed, but the build generates it: git rm it"
+            exit 1
+          fi
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+      - name: Lint
+        run: uv run --extra dev ruff check .
+      - name: Test
+        run: uv run --extra dev pytest
+      - name: Build docs (warnings are errors)
+        run: uv run --extra docs sphinx-build -W -b html docs docs/_build/html
 
-      - name: Write debian/changelog from the derived version
-        run: |
-          {
-            echo "ntrip-rtcm3-to-rtcm2p3 ($PKG_VERSION) unstable; urgency=medium"
-            echo ""
-            echo "  * Automated build of $SETUPTOOLS_SCM_PRETEND_VERSION from $(git describe --tags --always --match 'v*')."
-            echo ""
-            echo " -- Tim 'mithro' Ansell <me@mith.ro>  $(date -R)"
-          } > debian/changelog
-          head -1 debian/changelog
-
-      - name: Run the test suite (gate publishing on tests passing)
-        run: |
-          apt-get install -y --no-install-recommends gpsd-clients rtklib python3-pip
-          pip install --break-system-packages '.[dev]'
-          python3 -m pytest
-
-      - name: Build this package
-        run: dpkg-buildpackage -us -uc -b
-
-      - name: Build unpackaged deps (pyrtcm, pynmeagps) from PyPI
-        run: |
-          mkdir -p /tmp/deps /tmp/depdebs
-          pip download --no-deps --no-binary=:all: --dest /tmp/deps \
-            "pynmeagps>=1.1.4" "pyrtcm>=1.2"
-          # pynmeagps first; pyrtcm depends on it (dh_python3 can't infer this
-          # from the sdist without the package in the archive)
-          packaging/build-pypi-deb.sh /tmp/deps/pynmeagps-*.tar.gz /tmp/depdebs
-          packaging/build-pypi-deb.sh /tmp/deps/pyrtcm-*.tar.gz /tmp/depdebs python3-pynmeagps
-
-      - name: Collect debs
-        run: |
-          mkdir -p built-debs
-          cp ../*.deb built-debs/
-          cp /tmp/depdebs/*.deb built-debs/ || true
-          ls -l built-debs/
-
-      - uses: actions/upload-artifact@v4
+  build-deb:
+    name: build-deb (${{ matrix.suite }} ${{ matrix.arch }})
+    needs: test
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [trixie, forky, sid]
+        # Architecture: all (pure Python): one build per suite serves every
+        # architecture.
+        arch: [all]
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
         with:
-          name: debs-${{ matrix.suite }}
-          path: built-debs/
+          fetch-depth: 0  # full history + tags: the version is git describe's
+
+      # The shared build: debian:<suite>, build deps from debian/control, and
+      # the version from the shared deb-version.py (with ~deb<R>, and ~pr<P>
+      # on a pull request). Writes the .debs to built-debs/.
+      - name: Build
+        uses: mithro/apt-repo-action/build-deb@main
+        with:
+          suite: ${{ matrix.suite }}
+          arch: ${{ matrix.arch }}
+
+      # python3-pyrtcm and python3-pynmeagps, the runtime dependencies Debian
+      # doesn't have (pyrtcm in no suite, pynmeagps not in trixie), built from
+      # their PyPI sdists and published alongside, into the same built-debs/.
+      - name: Build pyrtcm and pynmeagps
+        env:
+          SUITE: ${{ matrix.suite }}
+        run: |
+          docker run --rm \
+            -v "$PWD/packaging:/packaging:ro" -v "$PWD/built-debs:/out" \
+            "debian:$SUITE" bash -ec '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y --no-install-recommends \
+                build-essential ca-certificates debhelper dh-python dpkg-dev fakeroot \
+                pybuild-plugin-pyproject python3-all python3-pip python3-setuptools
+              mkdir -p /work/sdists
+              pip download --no-deps --no-binary=:all: --dest /work/sdists \
+                "pynmeagps>=1.1.4" "pyrtcm>=1.2"
+              # pynmeagps first; pyrtcm depends on it (dh_python3 cannot infer
+              # that from the sdist while the package is not in the archive).
+              bash /packaging/build-pypi-deb.sh /work/sdists/pynmeagps-*.tar.gz /out
+              bash /packaging/build-pypi-deb.sh /work/sdists/pyrtcm-*.tar.gz /out python3-pynmeagps
+              ls -lh /out/'
+
+      # Install what was just built into a clean container of the same suite,
+      # and convert a canned RTCM3 frame with it (packaging/install-test.sh).
+      - name: Install test
+        env:
+          SUITE: ${{ matrix.suite }}
+        run: |
+          docker run --rm \
+            -v "$PWD/built-debs:/debs:ro" -v "$PWD/packaging:/packaging:ro" \
+            "debian:$SUITE" sh /packaging/install-test.sh
+
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: debs-${{ matrix.suite }}-${{ matrix.arch }}
+          path: built-debs/*.deb
+          retention-days: 14
 
   publish-apt:
     # Scoped to this job alone. A job calling a reusable workflow sets the
@@ -107,13 +152,14 @@ jobs:
       contents: read
       pages: write
       id-token: write
-    # Build on PRs to validate, but never publish from one: that would
-    # overwrite the live repository with unreviewed packages.
-    if: github.event_name != 'pull_request'
+    # Build and test pull requests, but never publish from one (or from any
+    # branch but main): that would overwrite the live repository with
+    # unreviewed packages.
+    if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
     needs: build-deb
     uses: mithro/apt-repo-action/.github/workflows/publish-apt.yml@main
     with:
-      suites: "trixie sid"
+      suites: "trixie forky sid"
       # Architecture: all -- one deb serves every architecture.
       architectures: "all"
       description: "NTRIP caster converting RTCM3 to RTCM2.3"

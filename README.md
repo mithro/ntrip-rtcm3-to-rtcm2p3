@@ -42,12 +42,48 @@ broadcast ephemeris.
               serve as a local NTRIP mount alongside the raw RTCM3
 ```
 
+## Install
+
+The packages are published as a signed apt repository per Debian suite:
+trixie, forky and sid. They are `Architecture: all`, so the one build serves
+every architecture. Put your suite's name in place of `trixie` below.
+
+```sh
+sudo install -d -m0755 /etc/apt/keyrings
+curl -fsSL https://mith.ro/ntrip-rtcm3-to-rtcm2p3/ntrip-rtcm3-to-rtcm2p3.gpg | sudo tee /etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg > /dev/null
+echo "deb [signed-by=/etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg] https://mith.ro/ntrip-rtcm3-to-rtcm2p3/trixie/ ./" \
+  | sudo tee /etc/apt/sources.list.d/ntrip-rtcm3-to-rtcm2p3.list
+sudo apt update
+sudo apt install ntrip-rtcm3-to-rtcm2p3
+```
+
+The repository is signed with the key
+`36E5 D845 2935 9CFE 8874  F1F1 44EA 5E20 5EE9 F42E`
+(`gpg --show-keys /etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg` shows it).
+It also carries `python3-pyrtcm` and `python3-pynmeagps`, which Debian doesn't
+have, so apt finds every dependency.
+
+`ntrip-rtcm3-to-rtcm2p3` is the systemd service; `python3-ntrip-rtcm3-to-rtcm2p3`
+alone is the library and the command. Set the upstream caster, credentials and
+bind addresses in `/etc/ntrip-rtcm3-to-rtcm2p3/env`, then
+`sudo systemctl restart ntrip-rtcm3-to-rtcm2p3`. See the
+[usage documentation](https://ntrip-rtcm3-to-rtcm2p3.readthedocs.io/usage.html).
+
 ## Development
 
 ```bash
 uv run --extra dev pytest        # test suite
 uv run --extra dev ruff check .  # lint
 ```
+
+The `Debian packages` workflow runs the tests in each suite's container, then
+builds the packages with
+[mithro/apt-repo-action](https://github.com/mithro/apt-repo-action)'s shared
+`build-deb` action, install-tests them (`packaging/install-test.sh`) and, from
+`main`, publishes them. The version comes from `git describe` plus the suite's
+`~deb<R>` (`0.1.0.post25~deb13`; nothing for sid). There is no committed
+`debian/changelog`: the build writes one with just its own entry, and git
+ignores it.
 
 ## License
 
