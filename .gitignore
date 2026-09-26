@@ -36,3 +36,8 @@ debian/*.debhelper
 debian/tmp/
 debian/ntrip-rtcm3-to-rtcm2p3/
 debian/python3-ntrip-rtcm3-to-rtcm2p3/
+
+# Local scratch space (build output, docker's root-owned files, harnesses)
+/tmp/
+# The .debs the build collects (apt-repo-action's build-deb out-dir)
+/built-debs/
