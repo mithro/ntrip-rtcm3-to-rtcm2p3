@@ -1,19 +1,72 @@
-name: Debian Packages
+name: Debian packages
 
+# Rolling release: every push to main tests, builds the packages for each
+# suite, and republishes a signed apt repository per suite on GitHub Pages
+# (https://mith.ro/ntrip-rtcm3-to-rtcm2p3/<suite>/). A pull request runs the
+# same tests and builds, and publishes nothing.
+#
+# This follows mithro/apt-repo-action's docs/packaging.md; how this
+# repository is packaged is declared in .github/apt-packaging.toml.
 on:
   push:
     branches: [main]
-  workflow_dispatch:
   pull_request:
+  workflow_dispatch:
 
 # Least privilege by default: only the publish job below raises this, and only
-# for itself. The build jobs run Docker and clone third-party sources, so they
+# for itself. The build jobs run Docker and fetch third-party sources, so they
 # should never hold a token that can write to Pages.
 permissions:
   contents: read
 
+concurrency:
+  group: deb-${{ github.ref }}
+  # A newer push to a pull request cancels the older build. On the default
+  # branch a running publish is never cancelled: the newest push waits for it,
+  # and replaces any older push still waiting (it contains that one's commits).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # The project's own tests, formerly the "CI" workflow (ci.yml), run with
+  # each suite's own Python, as the packages will be.
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [trixie, sid]
+    runs-on: ubuntu-24.04
+    container: debian:${{ matrix.suite }}
+    env:
+      # The suite's python3, never a uv-managed download.
+      UV_PYTHON_PREFERENCE: only-system
+    steps:
+      # Before the checkout: without git in the container, actions/checkout
+      # downloads a tarball instead of cloning, and hatch-vcs has no history
+      # to derive the version from.
+      - name: Install test dependencies
+        run: |
+          apt-get update
+          # gpsd-clients and rtklib: gpsdecode and str2str, the independent
+          # implementations the tests cross-check against.
+          apt-get install -y --no-install-recommends \
+            ca-certificates git gpsd-clients python3 rtklib
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0       # full history + tags so hatch-vcs can derive the version
+      # The workspace belongs to the runner's user, not the container's root,
+      # and git won't read a tree owned by someone else.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+      - name: Lint
+        run: uv run --extra dev ruff check .
+      - name: Test
+        run: uv run --extra dev pytest
+      - name: Build docs (warnings are errors)
+        run: uv run --extra docs sphinx-build -W -b html docs docs/_build/html
+
   build-deb:
+    needs: test
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -107,9 +160,10 @@ jobs:
       contents: read
       pages: write
       id-token: write
-    # Build on PRs to validate, but never publish from one: that would
-    # overwrite the live repository with unreviewed packages.
-    if: github.event_name != 'pull_request'
+    # Build and test pull requests, but never publish from one (or from any
+    # branch but main): that would overwrite the live repository with
+    # unreviewed packages.
+    if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
     needs: build-deb
     uses: mithro/apt-repo-action/.github/workflows/publish-apt.yml@main
     with:
