@@ -13,7 +13,8 @@ echo "deb [signed-by=/etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg] https://mith.
 sudo apt-get update && sudo apt-get install ntrip-rtcm3-to-rtcm2p3
 ```
 
-On sid, use `https://mith.ro/ntrip-rtcm3-to-rtcm2p3/sid/` instead.
+On forky or sid, put `forky` or `sid` in place of `trixie`. The repository is
+signed with the key `36E5 D845 2935 9CFE 8874  F1F1 44EA 5E20 5EE9 F42E`.
 
 The repo also carries `python3-pyrtcm` ([pyrtcm](https://pypi.org/project/pyrtcm/))
 and `python3-pynmeagps` ([pynmeagps](https://pypi.org/project/pynmeagps/)) — not
