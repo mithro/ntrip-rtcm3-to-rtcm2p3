@@ -30,14 +30,14 @@ $pkg ($ver) unstable; urgency=medium
 
   * Auto-built from the PyPI sdist for the ntrip-rtcm3-to-rtcm2p3 apt repo.
 
- -- ntrip-rtcm3-to-rtcm2p3 packaging <noreply@github.com>  $(date -R)
+ -- Tim 'mithro' Ansell <me@mith.ro>  $(date -R)
 EOF
 
 cat > debian/control <<EOF
 Source: $pkg
 Section: python
 Priority: optional
-Maintainer: ntrip-rtcm3-to-rtcm2p3 packaging <noreply@github.com>
+Maintainer: Tim 'mithro' Ansell <me@mith.ro>
 Build-Depends: debhelper-compat (= 13), dh-python, pybuild-plugin-pyproject,
                python3-all, python3-setuptools
 Standards-Version: 4.7.0
