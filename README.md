@@ -60,8 +60,9 @@ sudo apt install ntrip-rtcm3-to-rtcm2p3
 The repository is signed with the key
 `36E5 D845 2935 9CFE 8874  F1F1 44EA 5E20 5EE9 F42E`
 (`gpg --show-keys /etc/apt/keyrings/ntrip-rtcm3-to-rtcm2p3.gpg` shows it).
-It also carries `python3-pyrtcm` and `python3-pynmeagps`, which Debian doesn't
-have, so apt finds every dependency.
+It also carries the dependencies a suite's Debian archive doesn't have, so apt
+finds every one: `python3-pyrtcm` in every suite, and `python3-pynmeagps` in
+trixie (forky and sid have Debian's own).
 
 `ntrip-rtcm3-to-rtcm2p3` is the systemd service; `python3-ntrip-rtcm3-to-rtcm2p3`
 alone is the library and the command. Set the upstream caster, credentials and
@@ -84,6 +85,14 @@ builds the packages with
 `~deb<R>` (`0.1.0.post25~deb13`; nothing for sid). There is no committed
 `debian/changelog`: the build writes one with just its own entry, and git
 ignores it.
+
+The same workflow builds `python3-pyrtcm` and `python3-pynmeagps` from their
+PyPI sdists (`packaging/build-pypi-deb.sh`), but only for a suite whose Debian
+archive doesn't have the package: the script asks the suite's own apt, so our
+build never shadows Debian's. Their version is
+`<upstream>-0+welland<M>~deb<R>` (`1.1.7-0+welland3~deb13`): `<M>` counts the
+commits that changed the script, and the `-0` sorts below Debian's own `-1`,
+so on an upgrade to a suite that has the package, Debian's replaces ours.
 
 ## License
 

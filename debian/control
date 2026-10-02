@@ -18,8 +18,9 @@ Vcs-Browser: https://github.com/mithro/ntrip-rtcm3-to-rtcm2p3
 
 Package: python3-ntrip-rtcm3-to-rtcm2p3
 Architecture: all
-# python3-pyrtcm (and its dep python3-pynmeagps) are not in the main Debian
-# archive; they are published alongside this package in the same apt repo at
+# python3-pyrtcm is not in the main Debian archive, and its dependency
+# python3-pynmeagps only from forky on; where Debian lacks them they are
+# published alongside this package in the same apt repo at
 # https://mith.ro/ntrip-rtcm3-to-rtcm2p3/ (built by
 # .github/workflows/deb.yml). Add that repo before installing.
 Depends: ${python3:Depends},

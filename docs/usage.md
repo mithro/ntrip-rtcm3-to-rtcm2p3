@@ -16,10 +16,11 @@ sudo apt-get update && sudo apt-get install ntrip-rtcm3-to-rtcm2p3
 On forky or sid, put `forky` or `sid` in place of `trixie`. The repository is
 signed with the key `36E5 D845 2935 9CFE 8874  F1F1 44EA 5E20 5EE9 F42E`.
 
-The repo also carries `python3-pyrtcm` ([pyrtcm](https://pypi.org/project/pyrtcm/))
-and `python3-pynmeagps` ([pynmeagps](https://pypi.org/project/pynmeagps/)) — not
-yet in the main Debian archive — so `apt` resolves all dependencies from this one
-source.
+The repo also carries `python3-pyrtcm` ([pyrtcm](https://pypi.org/project/pyrtcm/)),
+which is not in the main Debian archive, and, for trixie,
+`python3-pynmeagps` ([pynmeagps](https://pypi.org/project/pynmeagps/)), which
+Debian has from forky on. So `apt` resolves every dependency from this one
+source and Debian's own.
 
 Or with `pip`/`uv` from source:
 
