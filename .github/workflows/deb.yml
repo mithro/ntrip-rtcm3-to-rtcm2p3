@@ -107,9 +107,10 @@ jobs:
       # every suite's Debian archive has (pyrtcm is in none, pynmeagps is in
       # forky and sid but not trixie), built from their PyPI sdists and
       # published alongside, into the same built-debs/.
-      # packaging/build-pypi-deb.sh asks the suite's own apt, and builds
-      # nothing where Debian has the package: ours must never shadow Debian's.
-      # It also explains the version, <upstream>-0+welland<M>~deb<R>.
+      # packaging/build-pypi-deb.sh has all of it: what is needed, the build
+      # dependencies, and the version, <upstream>-0+welland<M>[~deb<R>]. It
+      # asks the suite's own apt, and builds nothing where Debian has the
+      # package: ours must never shadow Debian's.
       - name: Build pyrtcm and pynmeagps
         env:
           SUITE: ${{ matrix.suite }}
@@ -123,19 +124,7 @@ jobs:
           export OURS DATE
           docker run --rm -e SUITE -e PR -e OURS -e DATE \
             -v "$PWD/packaging:/packaging:ro" -v "$PWD/built-debs:/out" \
-            "debian:$SUITE" bash -ec '
-              export DEBIAN_FRONTEND=noninteractive
-              apt-get update
-              apt-get install -y --no-install-recommends \
-                build-essential ca-certificates debhelper dh-python dpkg-dev fakeroot \
-                pybuild-plugin-pyproject python3-all python3-pip python3-setuptools
-              # The oldest versions that will do: pyproject.toml needs
-              # pyrtcm>=1.2, and pyrtcm needs pynmeagps>=1.1.4. dh_python3
-              # cannot infer that second one from the sdist while the package
-              # is not in the archive, so it is passed.
-              bash /packaging/build-pypi-deb.sh pynmeagps 1.1.4 /out
-              bash /packaging/build-pypi-deb.sh pyrtcm 1.2 /out "python3-pynmeagps (>= 1.1.4)"
-              ls -lh /out/'
+            "debian:$SUITE" bash /packaging/build-pypi-deb.sh /out
 
       # Install what was just built into a clean container of the same suite,
       # and convert a canned RTCM3 frame with it (packaging/install-test.sh).
