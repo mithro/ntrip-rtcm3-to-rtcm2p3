@@ -23,9 +23,11 @@ Architecture: all
 # published alongside this package in the same apt repo at
 # https://mith.ro/ntrip-rtcm3-to-rtcm2p3/ (built by
 # .github/workflows/deb.yml). Add that repo before installing.
+# The version is pyproject.toml's (pyrtcm>=1.2): dh_python3 cannot map the
+# requirement to a package that is not installed at build time.
 Depends: ${python3:Depends},
          ${misc:Depends},
-         python3-pyrtcm,
+         python3-pyrtcm (>= 1.2),
 Description: RTCM 3.x to RTCM 2.3 DGPS conversion library and CLI
  Converts an RTCM 3.x reference-station stream (observations, station position
  and broadcast ephemeris) into RTCM 2.3 Type 1 DGPS corrections that legacy
