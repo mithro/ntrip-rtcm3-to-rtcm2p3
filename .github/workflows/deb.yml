@@ -103,14 +103,25 @@ jobs:
           suite: ${{ matrix.suite }}
           arch: ${{ matrix.arch }}
 
-      # python3-pyrtcm and python3-pynmeagps, the runtime dependencies Debian
-      # doesn't have (pyrtcm in no suite, pynmeagps not in trixie), built from
-      # their PyPI sdists and published alongside, into the same built-debs/.
+      # python3-pyrtcm and python3-pynmeagps, the runtime dependencies not
+      # every suite's Debian archive has (pyrtcm is in none, pynmeagps is in
+      # forky and sid but not trixie), built from their PyPI sdists and
+      # published alongside, into the same built-debs/.
+      # packaging/build-pypi-deb.sh asks the suite's own apt, and builds
+      # nothing where Debian has the package: ours must never shadow Debian's.
+      # It also explains the version, <upstream>-0+welland<M>~deb<R>.
       - name: Build pyrtcm and pynmeagps
         env:
           SUITE: ${{ matrix.suite }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
-          docker run --rm \
+          # <M> and the changelog date: the commits that changed the script,
+          # and the last one's time, so the same packaging gives the same
+          # version.
+          OURS=$(git rev-list --count HEAD -- packaging/build-pypi-deb.sh)
+          DATE=$(git log -1 --format=%cd --date=rfc2822 -- packaging/build-pypi-deb.sh)
+          export OURS DATE
+          docker run --rm -e SUITE -e PR -e OURS -e DATE \
             -v "$PWD/packaging:/packaging:ro" -v "$PWD/built-debs:/out" \
             "debian:$SUITE" bash -ec '
               export DEBIAN_FRONTEND=noninteractive
@@ -118,13 +129,12 @@ jobs:
               apt-get install -y --no-install-recommends \
                 build-essential ca-certificates debhelper dh-python dpkg-dev fakeroot \
                 pybuild-plugin-pyproject python3-all python3-pip python3-setuptools
-              mkdir -p /work/sdists
-              pip download --no-deps --no-binary=:all: --dest /work/sdists \
-                "pynmeagps>=1.1.4" "pyrtcm>=1.2"
-              # pynmeagps first; pyrtcm depends on it (dh_python3 cannot infer
-              # that from the sdist while the package is not in the archive).
-              bash /packaging/build-pypi-deb.sh /work/sdists/pynmeagps-*.tar.gz /out
-              bash /packaging/build-pypi-deb.sh /work/sdists/pyrtcm-*.tar.gz /out python3-pynmeagps
+              # The oldest versions that will do: pyproject.toml needs
+              # pyrtcm>=1.2, and pyrtcm needs pynmeagps>=1.1.4. dh_python3
+              # cannot infer that second one from the sdist while the package
+              # is not in the archive, so it is passed.
+              bash /packaging/build-pypi-deb.sh pynmeagps 1.1.4 /out
+              bash /packaging/build-pypi-deb.sh pyrtcm 1.2 /out "python3-pynmeagps (>= 1.1.4)"
               ls -lh /out/'
 
       # Install what was just built into a clean container of the same suite,
