@@ -6,9 +6,10 @@
 #   docker run --rm -v "$PWD/built-debs:/debs:ro" \
 #     -v "$PWD/packaging:/packaging:ro" debian:<suite> sh /packaging/install-test.sh
 #
-# built-debs/ holds this repository's two packages and the python3-pyrtcm and
-# python3-pynmeagps it builds from PyPI (they are not in Debian's archive, or
-# not in every suite's). Everything else comes from the Debian archive.
+# built-debs/ holds this repository's two packages and whichever of
+# python3-pyrtcm and python3-pynmeagps the suite's Debian archive lacks, built
+# from PyPI (packaging/build-pypi-deb.sh). Everything else comes from the
+# Debian archive: python3-pynmeagps too, in the suites that have it.
 #
 # No network NTRIP caster is involved: a canned RTCM3 frame goes through the
 # converter, and gpsd's gpsdecode (an independent RTCM2 decoder) reads what
@@ -22,6 +23,10 @@ apt-get install -y --no-install-recommends /debs/*.deb gpsd-clients
 for p in ntrip-rtcm3-to-rtcm2p3 python3-ntrip-rtcm3-to-rtcm2p3 python3-pyrtcm python3-pynmeagps; do
   dpkg-query -W -f '${Package} ${Version} ${db:Status-Status}\n' "$p" | grep -q ' installed$'
 done
+# For the log: which of the two dependencies came from built-debs/ and which
+# from Debian, and at what version.
+dpkg-query -W python3-pyrtcm python3-pynmeagps
+apt-cache policy python3-pyrtcm python3-pynmeagps
 
 # The command runs, and reports the version the build derived from git: the
 # Debian version is the Python one plus the suite suffixes (~deb13, ~pr4).

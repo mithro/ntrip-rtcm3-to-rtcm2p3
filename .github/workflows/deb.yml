@@ -103,29 +103,34 @@ jobs:
           suite: ${{ matrix.suite }}
           arch: ${{ matrix.arch }}
 
-      # python3-pyrtcm and python3-pynmeagps, the runtime dependencies Debian
-      # doesn't have (pyrtcm in no suite, pynmeagps not in trixie), built from
-      # their PyPI sdists and published alongside, into the same built-debs/.
+      # python3-pyrtcm and python3-pynmeagps, the runtime dependencies not
+      # every suite's Debian archive has (pyrtcm is in none, pynmeagps is in
+      # forky and sid but not trixie), built from their PyPI sdists and
+      # published alongside, into the same built-debs/.
+      # packaging/build-pypi-deb.sh has all of it: what is needed, the build
+      # dependencies, and the version, <upstream>-0+welland<M>[~deb<R>]. It
+      # asks the suite's own apt, and builds nothing where Debian has the
+      # package: ours must never shadow Debian's.
       - name: Build pyrtcm and pynmeagps
         env:
           SUITE: ${{ matrix.suite }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
-          docker run --rm \
+          # <M> and the changelog date: the commits that changed the script,
+          # and the last one's time, so the same packaging gives the same
+          # version. The count follows the path: renaming the script starts
+          # it again at 1, below what is published, so a rename has to add
+          # the old count here.
+          if [ "$(git rev-parse --is-shallow-repository)" != false ]; then
+            echo "::error::this is a shallow clone, so the count of commits to packaging/build-pypi-deb.sh would be wrong and the dependencies' version would go backwards. Check out with fetch-depth: 0."
+            exit 1
+          fi
+          OURS=$(git rev-list --count HEAD -- packaging/build-pypi-deb.sh)
+          DATE=$(git log -1 --format=%cd --date=rfc2822 -- packaging/build-pypi-deb.sh)
+          export OURS DATE
+          docker run --rm -e SUITE -e PR -e OURS -e DATE \
             -v "$PWD/packaging:/packaging:ro" -v "$PWD/built-debs:/out" \
-            "debian:$SUITE" bash -ec '
-              export DEBIAN_FRONTEND=noninteractive
-              apt-get update
-              apt-get install -y --no-install-recommends \
-                build-essential ca-certificates debhelper dh-python dpkg-dev fakeroot \
-                pybuild-plugin-pyproject python3-all python3-pip python3-setuptools
-              mkdir -p /work/sdists
-              pip download --no-deps --no-binary=:all: --dest /work/sdists \
-                "pynmeagps>=1.1.4" "pyrtcm>=1.2"
-              # pynmeagps first; pyrtcm depends on it (dh_python3 cannot infer
-              # that from the sdist while the package is not in the archive).
-              bash /packaging/build-pypi-deb.sh /work/sdists/pynmeagps-*.tar.gz /out
-              bash /packaging/build-pypi-deb.sh /work/sdists/pyrtcm-*.tar.gz /out python3-pynmeagps
-              ls -lh /out/'
+            "debian:$SUITE" bash /packaging/build-pypi-deb.sh /out
 
       # Install what was just built into a clean container of the same suite,
       # and convert a canned RTCM3 frame with it (packaging/install-test.sh).
