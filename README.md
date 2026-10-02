@@ -90,9 +90,12 @@ The same workflow builds `python3-pyrtcm` and `python3-pynmeagps` from their
 PyPI sdists (`packaging/build-pypi-deb.sh`), but only for a suite whose Debian
 archive doesn't have the package: the script asks the suite's own apt, so our
 build never shadows Debian's. Their version is
-`<upstream>-0+welland<M>~deb<R>` (`1.1.7-0+welland3~deb13`): `<M>` counts the
-commits that changed the script, and the `-0` sorts below Debian's own `-1`,
-so on an upgrade to a suite that has the package, Debian's replaces ours.
+`<upstream>-0+welland<M>[~deb<R>]`, with PyPI's version as `<upstream>` and
+nothing for sid, as above. `<M>` counts the commits that changed the script,
+and the `-0` sorts below Debian's own `-1`, so on an upgrade to a suite that
+has the package, Debian's replaces ours. Neither part follows this
+repository's own commits, so the two packages are republished at the same
+version until the script or the release on PyPI changes.
 
 ## License
 
