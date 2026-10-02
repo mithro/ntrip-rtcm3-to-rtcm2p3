@@ -118,7 +118,13 @@ jobs:
         run: |
           # <M> and the changelog date: the commits that changed the script,
           # and the last one's time, so the same packaging gives the same
-          # version.
+          # version. The count follows the path: renaming the script starts
+          # it again at 1, below what is published, so a rename has to add
+          # the old count here.
+          if [ "$(git rev-parse --is-shallow-repository)" != false ]; then
+            echo "::error::this is a shallow clone, so the count of commits to packaging/build-pypi-deb.sh would be wrong and the dependencies' version would go backwards. Check out with fetch-depth: 0."
+            exit 1
+          fi
           OURS=$(git rev-list --count HEAD -- packaging/build-pypi-deb.sh)
           DATE=$(git log -1 --format=%cd --date=rfc2822 -- packaging/build-pypi-deb.sh)
           export OURS DATE
